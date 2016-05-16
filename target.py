@@ -3,37 +3,30 @@
 #
 
 from rpython.rlib.parsing.ebnfparse import parse_ebnf, make_parse_function
+import string
 import pdb
 
-class ASTVisitor(object):
-    def visit_expr(self, node):
-        if len(node.children) == 3:
-            return node.children[1].visit(self)
-        elif len(node.children) == 1 and node.children[0].symbol == 'VALUE':
-            return node.children[0].additional_info
-        else:
-            pdb.set_trace()
+def parse_exp(st, curr_ind):
+    while st[curr_ind] in string.whitespace:
+        curr_ind += 1
+    if st[curr_ind] == '(':
+        tokens = []
+        while st[curr_ind] != ')':
+            t, i = parse_exp(st, curr_ind+1)
+            curr_ind = i
+            tokens.append(t)
+        curr_ind += 1
+        ast = tokens
+    else:
+        prev_ind = curr_ind
+        while st[curr_ind] not in string.whitespace+')':
+            curr_ind += 1
+        ast = st[prev_ind:curr_ind]
+    return ast, curr_ind
 
-    def visit__star_symbol0(self, node):
-        if len(node.children) == 2 and \
-           node.children[0].symbol == 'expr' and \
-           node.children[1].symbol == '_star_symbol0':
-            return (node.children[0].visit(self),)+node.children[1].visit(self)
-        elif len(node.children) == 1:
-            return (node.children[0].visit(self),)
-        else:
-            pdb.set_trace()
-
-
-def convert_to_ast(st):
-    regexs, rules, transformer = parse_ebnf("""
-VALUE: "([a-zA-Z0-9\?\+\-\*])+";
-IGNORE: "[ \\n\\t]";
-expr: "(" expr * ")" | VALUE ;
-""")
-    parse = make_parse_function(regexs, rules)
-    tree = parse(st)
-    return tree.visit(ASTVisitor())
+def parse(st):
+    t, i = parse_exp(st, 0)
+    return t
 
 def eval(exp, env, k):
     if exp == ():
@@ -153,7 +146,8 @@ def entry_point(argv):
     #parse(src)
     def halt(v):
         print v
-    return eval(convert_to_ast(src), {}, halt)
+        return v
+    return eval(parse(src), {}, halt)
 
 def target(*args):
     return entry_point, None
