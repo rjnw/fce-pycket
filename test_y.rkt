@@ -1,3 +1,3 @@
-(((lambda (f) (lambda (x) ((f f) x)))
-  (lambda (f) (lambda (x) (if (zero? x) 1 (* x ((f f) (- x 1)))))))
+(((lambda (f) (lambda (y) ((f f) y)))
+  (lambda (g) (lambda (x) (if (zero? x) 1 (* x ((g g) (- x 1)))))))
  5)
