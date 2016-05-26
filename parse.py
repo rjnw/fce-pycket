@@ -41,6 +41,17 @@ class SexpAST(AST):
     def __str__(self):
         return str([str(ast) for ast in self.children])
 
+class Environment(AST):
+    def __init__(self):
+        self.var_map = {}
+    def apply(self, key):
+        return self.var_map[key.string_value]
+    def extend(self, key, value):
+        ne = Environment()
+        ne.var_map = self.var_map.copy()
+        ne.var_map[key.string_value] = value
+        return ne
+
 class SymbolAST(AST):
     def __init__(self, symbol_str):
         self.string_value = symbol_str
