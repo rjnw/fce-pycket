@@ -5,24 +5,10 @@
 from parse import *#convert_to_ast, SymbolAST, NumberAST
 import pdb
 
-class Cont(object):
-    def __init__(self, closure_args, env, k, func):
-        self.closure_args = closure_args
-        self.env = env
-        self.k = k
-        self.func = func
-    def __call__(self, v):
-        return self.func(self.closure_args, self.env, self.k, v)
-
-def continuation(func):
-    def new_f(cl_args, env, k):
-        return Cont(cl_args, env, k, func)
-    return new_f
-
 @continuation
 def app_k1(cl_args, env, k, v1):
     exp1 = cl_args[0]
-    return eval(exp1, env, app_k2([v1], env, k))
+    return (exp1, env, app_k2([v1], env, k))
 
 @continuation
 def app_k2(cl_args, env, k, v2):
@@ -32,6 +18,16 @@ def app_k2(cl_args, env, k, v2):
 @continuation
 def halt_k(cl_args, env, k, v):
     raise Done(v)
+
+@continuation
+def let_k(cl_args, env, k, v):
+    id, body = cl_args
+    new_env = extend_env(id, v, env)
+    return body, new_env, k
+
+@continuation
+def callcc_k(cl_args, env, k, v):
+    return apply_closure(v, k, k)
 
 class Done(Exception):
     def __init__(self, vals):
@@ -47,36 +43,39 @@ def eval(exp, env, k):
     elif type(exp) is SymbolAST:
         return apply_env(exp.string_value, env, k)
 
-    elif type(exp[0]) is SymbolAST and exp[0].string_value == "lambda":
-        return create_closure(exp[2], exp[1][0].string_value, env, k)
+    elif type(exp[0]) is SymbolAST and exp[0].string_value == 'lambda':
+        return create_closure(exp[2], exp[1][0], env, k)
+
+    elif type(exp[0]) is SymbolAST and exp[0].string_value == 'let':
+        print 'let:', exp, exp[1][1]
+        return exp[1][1], env, let_k([exp[1][0], exp[2]], env, k)
+
+    elif type(exp[0]) is SymbolAST and exp[0].string_value == 'call/cc':
+        return exp[1], env, callcc_k([], env, k)
 
     else:
-        return eval(exp[0], env, app_k1([exp[1]], env, k))
+        return (exp[0], env, app_k1([exp[1]], env, k))
 
-def create_closure (exp, var, env, k):
+def create_closure(exp, var, env, k):
     return apply_k(k, ClosureAST(exp, var, env))
 
 def apply_closure(closure, arg, k):
-    body = closure.exp
-    var = closure.var
-    env = closure.env
-    return eval(body, extend_env(var, arg, env), k)
+    if type(closure) is Cont:
+        return apply_k(closure, arg)
+    else:
+        body = closure.exp
+        var = closure.var
+        env = closure.env
+        return (body, extend_env(var, arg, env), k)
+
 
 def extend_env (id, arg, env):
     new_env = env.copy()
-    new_env[id] = arg
+    new_env[id.string_value] = arg
     return new_env
 
 def apply_env(exp, env, k):
     return apply_k(k, env[exp])
-
-def eval_loop(eval_pair):
-    func, args = eval_pair
-    try:
-        func(*args)
-    except Done, e:
-        return e.values
-    return args
 
 def entry_point(argv):
     import os
@@ -88,17 +87,18 @@ def entry_point(argv):
     fp = os.open(filename, os.O_RDONLY, 0777)
     src = os.read(fp, 4096)
     os.close(fp)
-
-    print 'evaluating: \n',src
+    exp, env, k = (convert_to_ast(src), {}, halt_k([], None, None))
     try:
-        eval(convert_to_ast(src), {}, halt_k([], None, None))
+        while True:
+            exp, env, k = eval(exp, env, k)
     except Done, e:
-        return e.values.number_value
+        print e.values
+        return 0
 
 def target(*args):
     return entry_point, None
 
 if __name__ == "__main__":
     import sys
-    print entry_point(sys.argv)
+    entry_point(sys.argv)
 

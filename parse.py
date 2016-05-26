@@ -29,13 +29,13 @@ def convert_to_ast(st):
     t, i = parse_exp(st, 0)
     return t
 
+
 class AST(object):
     pass
 
 class SexpAST(AST):
     def __init__(self, children):
         self.children = children
-
     def __getitem__(self, key):
         return self.children[key]
     def __str__(self):
@@ -59,4 +59,20 @@ class ClosureAST(AST):
         self.var = var
         self.env = env
     def __str__(self):
-        return 'closure'
+        return 'ast: closure'
+
+class Cont(ClosureAST):
+    def __init__(self, closure_args, env, k, func):
+        self.closure_args = closure_args
+        self.env = env
+        self.k = k
+        self.func = func
+    def __call__(self, v):
+        return self.func(self.closure_args, self.env, self.k, v)
+    def __str__(self):
+        return 'ast: continuation'
+
+def continuation(func):
+    def new_f(cl_args, env, k):
+        return Cont(cl_args, env, k, func)
+    return new_f
