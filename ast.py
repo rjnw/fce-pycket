@@ -1,35 +1,6 @@
 class AST(object):
     pass
 
-# class AppAST(AST):
-#     def __init__(self, rator, rand):
-#         self.rator = rator
-#         self.rand = rand
-
-# class LambdaAST(AST):
-#     def __init__(self, var, body):
-#         self.var = var
-#         self.body = body
-
-# class letAST(AST):
-#     def __init__(self, var, val, body):
-#         self.var = var
-#         self.val = val
-#         self.body = body
-
-# class callccAST(AST):
-#     def __init__(self, expr):
-#         self.exp = exp
-
-# class wceAST(AST):
-#     def __init__(self, env_exp, exp):
-#         self.env_exp = env_exp
-#         self.exp = exp
-
-# class ceAST(AST):
-#     def __init__(self, exp):
-#         self.exp = exp
-
 class SymbolAST(AST):
     def __init__(self, symbol_str):
         self.string_value = symbol_str

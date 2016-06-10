@@ -1,4 +1,8 @@
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+#
 from ast import *
+
 class Trampoline(object):
     def __init__(self, exp, env, kont):
         self.exp = exp
@@ -8,29 +12,25 @@ class Trampoline(object):
 class Value(object):
     pass
 
-def continuation(func):
-    def new_f(cl_args, env, k):
-        return Cont(cl_args, env, k, func)
-    return new_f
-
-@continuation
-def cont_k(cl_args, env, k, v):
-    kont = cl_args[0]
-    return kont(v)
-
 class Cont(Value):
     def __init__(self, closure_args, env, k, func):
         self.closure_args = closure_args
         self.env = env
         self.k = k
         self.func = func
-    def __call__(self, v):
-        return self.func(self.closure_args, self.env, self.k, v)
-    def evaluate(self, rest_exps):
-        rand = rest_exps[0]
-        return Trampoline(rand, env, cont_k([self], env, k))
     def __str__(self):
         return 'value: continuation'
+
+class cont_k(Cont):
+    def __init__(self, kont, env, k):
+        self.kont = kont
+        self.env = env
+        self.k = k
+    def plug_reduce(self, v):
+        return kont.plug_reduce(v)
+    def evaluate(self, rest_exps, env, k):
+        rand = rest_exps[0]
+        return Trampoline(rand, env, cont_k(self, env, k))
 
 class Number(Value):
     def __init__(self, num):
@@ -53,29 +53,36 @@ class Lambda(Value):
     def evaluate(self, rest_exps, env, k):
         arg = rest_exps[0][0]
         body = rest_exps[1]
-        return k(Closure(body, arg, env))
+        return k.plug_reduce(Closure(body, arg, env))
     def __str__(self):
-        return 'value: native lambda evaluator'
+        return 'value: native lambda'
 
-@continuation
-def let_k(cl_args, env, k, v):
-    id, body = cl_args
-    new_env = env.extend(id, v)
-    return Trampoline(body, new_env, k)
+class let_k(Cont):
+    def __init__(self, var, body, env, k):
+        self.var = var
+        self.body = body
+        self.env = env
+        self.k = k
+    def plug_reduce(self, v):
+        new_env = self.env.extend(self.var, v)
+        return Trampoline(self.body, new_env, self.k)
 
 class Let(Value):
     def evaluate(self, rest_exps, env, k):
         var = rest_exps[0][0]
         val_exp = rest_exps[0][1]
         body_exp = rest_exps[1]
-        return Trampoline(val_exp, env, let_k([var, body_exp], env, k))
+        return Trampoline(val_exp, env, let_k(var, body_exp, env, k))
     def __str__(self):
-        return 'value: native let evaluator'
+        return 'value: native let'
 
-@continuation
-def closure_k(cl_args, env, k, v):
-    clos = cl_args[0]
-    return Trampoline(clos.body, clos.env.extend(clos.var, v), k)
+class closure_k(Cont):
+    def __init__(self, clos, env, k):
+        self.clos = clos
+        self.eval_env = env
+        self.k = k
+    def plug_reduce(self, v):
+        return Trampoline(self.clos.body, self.clos.env.extend(self.clos.var, v), self.k)
 
 class Closure(Value):
     def __init__(self, body, var, env):
@@ -86,16 +93,101 @@ class Closure(Value):
         return 'value: closure'
     def evaluate(self, rest_exps, env, k):
         rand = rest_exps[0]
-        return Trampoline(rand, env, closure_k([self], env, k))
+        return Trampoline(rand, env, closure_k(self, env, k))
 
+class If(Value):
+    def evaluate(self, rest_exps, env, k):
+        ch, th, el = rest_exps
+        return Trampoline(ch, env, if_k(th, el, env, k))
 
-@continuation
-def app_k(cl_args, env, k, v):
-    return v.evaluate(cl_args, env, k)
+class if_k(Cont):
+    def __init__(self, th, el, env, k):
+        self.th = th
+        self.el = el
+        self.env = env
+        self.k = k
+    def plug_reduce(self, v):
+        if v == true: #TODO
+            return Trampoline(self.th, self.env, self.k)
+        else:
+            return Trampoline(self.el, self.env, self.k)
 
+class Cell(Value):
+    def __init__(self, car, cdr):
+        self.car = car
+        self.cdr = cdr
+class Bool(Value):
+    pass
+
+nil = None
+
+true = Bool()
+false = Bool()
+
+def cons(car, cdr):
+    return Cell(car, cdr)
+def car(ls):
+    return ls.car
+def cdr(ls):
+    return ls.cdr
+def add(e1, e2):
+    return e1.number_value + e2.number_value
+def sub(e1, e2):
+    return e1.number_value - e2.number_value
+
+def prim_one_arg(func):
+    class prim_k(Cont):
+        def __init__(self, env, k):
+            self.env = env
+            self.k = k
+        def plug_reduce(self, v):
+            return self.k.plug_reduce(func(v))
+    class prim_eval(Value):
+        def evaluate(self, rest_exps, env, k):
+            return Trampoline(rest_exps[0], env, prim_k(env, k))
+    return prim_eval
+
+class zero_huh_k(Cont):
+    def __init__(self, env, k):
+        self.env = env
+        self.k = k
+    def plug_reduce(self, v):
+        return self.k.plug_reduce(zero_huh(v))
+
+def zero_huh(v):
+    if v.number_value == 0:
+        return true
+    else:
+        return false
+
+class ZeroHuh(Value):
+    def evaluate(self, rest_exps, env, k):
+        return Trampoline(rest_exps[0], env, zero_huh_k(env, k))
+
+class app_k(Cont):
+    def __init__(self, rest_exps, env, k):
+        self.rest_exps = rest_exps
+        self.env = env
+        self.k = k
+    def plug_reduce(self, v):
+        return v.evaluate(self.rest_exps, self.env, self.k)
+
+class halt_k(Cont):
+    def __init__(self):
+        pass
+    def plug_reduce(self, v):
+        raise Done(v)
+
+class Done(Exception):
+    def __init__(self, val):
+        self.value = val
 
 def initial_environment():
     env = Environment()
     env = env.extend(SymbolAST('lambda'), Lambda())
     env = env.extend(SymbolAST('let'), Let())
+    env = env.extend(SymbolAST('if'), If())
+    env = env.extend(SymbolAST('true'), true)
+    env = env.extend(SymbolAST('false'), false)
+    env = env.extend(SymbolAST('zero?'), ZeroHuh())
     return env
