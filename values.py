@@ -119,22 +119,6 @@ class Cell(Value):
 class Bool(Value):
     pass
 
-nil = None
-
-true = Bool()
-false = Bool()
-
-def cons(car, cdr):
-    return Cell(car, cdr)
-def car(ls):
-    return ls.car
-def cdr(ls):
-    return ls.cdr
-def add(e1, e2):
-    return e1.number_value + e2.number_value
-def sub(e1, e2):
-    return e1.number_value - e2.number_value
-
 def prim_one_arg(func):
     class prim_k(Cont):
         def __init__(self, env, k):
@@ -142,27 +126,62 @@ def prim_one_arg(func):
             self.k = k
         def plug_reduce(self, v):
             return self.k.plug_reduce(func(v))
+
     class prim_eval(Value):
         def evaluate(self, rest_exps, env, k):
             return Trampoline(rest_exps[0], env, prim_k(env, k))
     return prim_eval
 
-class zero_huh_k(Cont):
-    def __init__(self, env, k):
-        self.env = env
-        self.k = k
-    def plug_reduce(self, v):
-        return self.k.plug_reduce(zero_huh(v))
+def prim_two_arg(func):
+    class prim_k1(Cont):
+        def __init__(self, exp2, env, k):
+            self.exp2 = exp2
+            self.env = env
+            self.k = k
+        def plug_reduce(self, v):
+            return Trampoline(self.exp2, self.env, prim_k2(v, self.env, self.k))
 
+    class prim_k2(Cont):
+        def __init__(self, v1, env, k):
+            self.v1 = v1
+            self.env = env
+            self.k = k
+        def plug_reduce(self, v):
+            return self.k.plug_reduce(func(self.v1, v))
+
+    class prim_eval(Value):
+        def evaluate(self, rest_exps, env, k):
+            return Trampoline(rest_exps[0], env, prim_k1(rest_exps[1], env, k))
+    return prim_eval
+
+nil = None
+
+true = Bool()
+false = Bool()
+@prim_two_arg
+def cons(car, cdr):
+    return Cell(car, cdr)
+@prim_one_arg
+def car(ls):
+    return ls.car
+@prim_one_arg
+def cdr(ls):
+    return ls.cdr
+@prim_two_arg
+def add(e1, e2):
+    return Number(e1.number_value + e2.number_value)
+@prim_two_arg
+def sub(e1, e2):
+    return Number(e1.number_value - e2.number_value)
+@prim_two_arg
+def mult(e1, e2):
+    return Number(e1.number_value * e2.number_value)
+@prim_one_arg
 def zero_huh(v):
     if v.number_value == 0:
         return true
     else:
         return false
-
-class ZeroHuh(Value):
-    def evaluate(self, rest_exps, env, k):
-        return Trampoline(rest_exps[0], env, zero_huh_k(env, k))
 
 class app_k(Cont):
     def __init__(self, rest_exps, env, k):
@@ -189,5 +208,11 @@ def initial_environment():
     env = env.extend(SymbolAST('if'), If())
     env = env.extend(SymbolAST('true'), true)
     env = env.extend(SymbolAST('false'), false)
-    env = env.extend(SymbolAST('zero?'), ZeroHuh())
+    env = env.extend(SymbolAST('zero?'), zero_huh())
+    env = env.extend(SymbolAST('+'), add())
+    env = env.extend(SymbolAST('-'), sub())
+    env = env.extend(SymbolAST('cons'), cons())
+    env = env.extend(SymbolAST('car'), car())
+    env = env.extend(SymbolAST('cdr'), cdr())
+    env = env.extend(SymbolAST('*'), mult())
     return env
