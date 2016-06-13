@@ -10,16 +10,12 @@ class Trampoline(object):
         self.kont = kont
 
 class Value(object):
-    pass
+    def evaluate(self, rest_exps, env, k):
+        raise NotImplementedError("Abstract base class")
 
 class Cont(Value):
-    def __init__(self, closure_args, env, k, func):
-        self.closure_args = closure_args
-        self.env = env
-        self.k = k
-        self.func = func
-    def __str__(self):
-        return 'value: continuation'
+    def plug_reduce(self, v):
+        raise NotImplementedError("Abstract base class")
 
 class Number(Value):
     def __init__(self, num):
@@ -46,6 +42,12 @@ class Lambda(Value):
     def __str__(self):
         return 'value: native lambda'
 
+class CapturedCont(Value):
+    def __init__(self, k):
+        self.k = k
+    def evaluate(self, rest_exps, env, k):
+        return Trampoline(rest_exps[0], env, self.k)
+
 class callcc_k(Cont):
     def __init__(self, env, k):
         self.env = env
@@ -53,10 +55,7 @@ class callcc_k(Cont):
 
     def plug_reduce(self, v):
         ck = closure_k(v, self.env, self.k)
-        return ck.plug_reduce(self)
-
-    def evaluate(self, rest_exps, env, k):
-        return Trampoline(rest_exps[0], env, self.k)
+        return ck.plug_reduce(CapturedCont(self.k))
 
 class Callcc(Value):
     def evaluate(self, rest_exps, env, k):
@@ -84,6 +83,7 @@ class Let(Value):
 
 class closure_k(Cont):
     def __init__(self, clos, env, k):
+        assert isinstance(clos, Closure)
         self.clos = clos
         self.eval_env = env
         self.k = k
