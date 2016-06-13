@@ -21,17 +21,6 @@ class Cont(Value):
     def __str__(self):
         return 'value: continuation'
 
-class cont_k(Cont):
-    def __init__(self, kont, env, k):
-        self.kont = kont
-        self.env = env
-        self.k = k
-    def plug_reduce(self, v):
-        return kont.plug_reduce(v)
-    def evaluate(self, rest_exps, env, k):
-        rand = rest_exps[0]
-        return Trampoline(rand, env, cont_k(self, env, k))
-
 class Number(Value):
     def __init__(self, num):
         self.number_value = num
@@ -56,6 +45,23 @@ class Lambda(Value):
         return k.plug_reduce(Closure(body, arg, env))
     def __str__(self):
         return 'value: native lambda'
+
+class callcc_k(Cont):
+    def __init__(self, env, k):
+        self.env = env
+        self.k = k
+
+    def plug_reduce(self, v):
+        ck = closure_k(v, self.env, self.k)
+        return ck.plug_reduce(self)
+
+    def evaluate(self, rest_exps, env, k):
+        return Trampoline(rest_exps[0], env, self.k)
+
+class Callcc(Value):
+    def evaluate(self, rest_exps, env, k):
+        arg = rest_exps[0]
+        return Trampoline(arg, env, callcc_k(env, k))
 
 class let_k(Cont):
     def __init__(self, var, body, env, k):
@@ -215,4 +221,5 @@ def initial_environment():
     env = env.extend(SymbolAST('car'), car())
     env = env.extend(SymbolAST('cdr'), cdr())
     env = env.extend(SymbolAST('*'), mult())
+    env = env.extend(SymbolAST('call/cc'), Callcc())
     return env
