@@ -62,6 +62,24 @@ class Callcc(Value):
         arg = rest_exps[0]
         return Trampoline(arg, env, callcc_k(env, k))
 
+class CaptEnv(Value):
+    def evaluate(self, rest_exps, env, k):
+        return k.plug_reduce(env)
+
+class withenv_k(Cont):
+    def __init__(self, eval_exp, env, k):
+        self.exp = exp
+        self.env = env
+        self.k = k
+    def plug_reduce(self, v):
+        return Trampoline(self.exp, v, self.k)
+
+class WithEnv(Value):
+    def evaluate(self, rest_exps, env, k):
+        env_exp = rest_exps[0]
+        eval_exp = rest_exps[1]
+        return Trampoline(evn_exp, env, withenv_k(eval_exp, env, k))
+
 class let_k(Cont):
     def __init__(self, var, body, env, k):
         self.var = var
@@ -71,6 +89,7 @@ class let_k(Cont):
     def plug_reduce(self, v):
         new_env = self.env.extend(self.var, v)
         return Trampoline(self.body, new_env, self.k)
+
 
 class Let(Value):
     def evaluate(self, rest_exps, env, k):
@@ -100,6 +119,7 @@ class Closure(Value):
     def evaluate(self, rest_exps, env, k):
         rand = rest_exps[0]
         return Trampoline(rand, env, closure_k(self, env, k))
+
 
 class If(Value):
     def evaluate(self, rest_exps, env, k):
@@ -164,24 +184,31 @@ nil = None
 
 true = Bool()
 false = Bool()
+
 @prim_two_arg
 def cons(car, cdr):
     return Cell(car, cdr)
+
 @prim_one_arg
 def car(ls):
     return ls.car
+
 @prim_one_arg
 def cdr(ls):
     return ls.cdr
+
 @prim_two_arg
 def add(e1, e2):
     return Number(e1.number_value + e2.number_value)
+
 @prim_two_arg
 def sub(e1, e2):
     return Number(e1.number_value - e2.number_value)
+
 @prim_two_arg
 def mult(e1, e2):
     return Number(e1.number_value * e2.number_value)
+
 @prim_one_arg
 def zero_huh(v):
     if v.number_value == 0:
