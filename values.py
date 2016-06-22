@@ -24,14 +24,30 @@ class Number(Value):
         return str(self.number_value)
 
 class Environment(Value):
-    def __init__(self):
+    def __init__(self, prev=None):
+        self.val_arr = None
         self.var_map = {}
+        self.prev = prev
     def apply(self, key):
-        return self.var_map[key.string_value]
+        index = self.lookup(key)
+        if index == -1:
+            return self.prev.apply(key)
+        else:
+            return self.val_arr[index]
+    def lookup(self, key):
+        return self.var_map.get(key, -1)
     def extend(self, key, value):
         ne = Environment()
-        ne.var_map = self.var_map.copy()
-        ne.var_map[key.string_value] = value
+        ne.prev = self
+        ne.val_arr = [value]
+        ne.var_map[key] = 0
+        return ne
+    def extend_mult(self, keys, values):
+        ne = Environment()
+        ne.prev = self
+        ne.val_arr = values
+        for i,k in enumerate(keys):
+            ne.var_map[k] = i
         return ne
 
 class Lambda(Value):
@@ -87,7 +103,7 @@ class let_k(Cont):
         self.env = env
         self.k = k
     def plug_reduce(self, v):
-        new_env = self.env.extend(self.var, v)
+        new_env = self.env.extend(self.var.string_value, v)
         return Trampoline(self.body, new_env, self.k)
 
 
@@ -107,7 +123,7 @@ class closure_k(Cont):
         self.eval_env = env
         self.k = k
     def plug_reduce(self, v):
-        return Trampoline(self.clos.body, self.clos.env.extend(self.clos.var, v), self.k)
+        return Trampoline(self.clos.body, self.clos.env.extend(self.clos.var.string_value, v), self.k)
 
 class Closure(Value):
     def __init__(self, body, var, env):
@@ -236,17 +252,8 @@ class Done(Exception):
 
 def initial_environment():
     env = Environment()
-    env = env.extend(SymbolAST('lambda'), Lambda())
-    env = env.extend(SymbolAST('let'), Let())
-    env = env.extend(SymbolAST('if'), If())
-    env = env.extend(SymbolAST('true'), true)
-    env = env.extend(SymbolAST('false'), false)
-    env = env.extend(SymbolAST('zero?'), zero_huh())
-    env = env.extend(SymbolAST('+'), add())
-    env = env.extend(SymbolAST('-'), sub())
-    env = env.extend(SymbolAST('cons'), cons())
-    env = env.extend(SymbolAST('car'), car())
-    env = env.extend(SymbolAST('cdr'), cdr())
-    env = env.extend(SymbolAST('*'), mult())
-    env = env.extend(SymbolAST('call/cc'), Callcc())
+    env = env.extend_mult(['lambda', 'let', 'if', 'true', 'false',
+                           'zero?', '+', '-', 'cons', 'car', 'cdr', '*', 'call/cc'],
+                          [Lambda(), Let(), If(), true, false, zero_huh(), add(),
+                           sub(), cons(), car(), cdr(), mult(), Callcc()])
     return env

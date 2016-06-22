@@ -13,7 +13,7 @@ def eval(tramp):
     if type(exp) is NumberAST:
         return k.plug_reduce(Number(exp.number_value))
     elif type(exp) is SymbolAST:
-        return k.plug_reduce(env.apply(exp))
+        return k.plug_reduce(env.apply(exp.string_value))
     elif type(exp) is SexpAST:
         return Trampoline(exp[0], env, app_k(exp.children[1:], env, k))
 
