@@ -6,16 +6,25 @@ from parse import *
 from values import *
 import pdb
 
+from rpython.rlib.jit import JitDriver
+
+jitdriver = JitDriver(greens=['exp'], reds=['env', 'k'])
+
 def eval(tramp):
     exp = tramp.exp
     env = tramp.env
     k = tramp.kont
+    jitdriver.jit_merge_point(exp=exp, env=env, k=k)
     if type(exp) is NumberAST:
         return k.plug_reduce(Number(exp.number_value))
     elif type(exp) is SymbolAST:
         return k.plug_reduce(env.apply(exp.string_value))
     elif type(exp) is SexpAST:
         return Trampoline(exp[0], env, app_k(exp.children[1:], env, k))
+
+def jitpolicy(driver):
+    from rpython.jit.codewriter.policy import JitPolicy
+    return JitPolicy()
 
 def entry_point(argv):
     import os
