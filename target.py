@@ -20,7 +20,9 @@ def eval(tramp):
     elif type(exp) is SymbolAST:
         return k.plug_reduce(env.apply(exp.string_value))
     elif type(exp) is SexpAST:
-        return Trampoline(exp[0], env, app_k(exp.children[1:], env, k))
+        ret = Trampoline(exp[0], env, app_k(exp.children[1:], env, k))
+        jitdriver.can_enter_jit(exp=ret.exp, env=ret.env, k=ret.kont)
+        return ret
 
 def jitpolicy(driver):
     from rpython.jit.codewriter.policy import JitPolicy

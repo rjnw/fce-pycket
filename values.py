@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 from ast import *
+from rpython.rlib import streamio as sio
 
 class Trampoline(object):
     def __init__(self, exp, env, kont):
@@ -116,6 +117,27 @@ class Let(Value):
     def __str__(self):
         return 'value: native let'
 
+class fix_k(Cont):
+    def __init__(self, var, body, env, k):
+        self.var = var
+        self.body = body
+        self.env = env
+        self.k = k
+    def plug_reduce(self, v):
+        new_env = self.env.extend(self.var.string_value, v)
+        assert isinstance(v, Closure)
+        v.env = new_env
+        return Trampoline(self.body, new_env, self.k)
+
+class Fix(Value):
+    def evaluate(self, rest_exps, env, k):
+        var = rest_exps[0][0]
+        val_exp = rest_exps[0][1]
+        body_exp = rest_exps[1]
+        return Trampoline(val_exp, env, fix_k(var, body_exp, env, k))
+    def __str__(self):
+        return 'value: native fix'
+
 class closure_k(Cont):
     def __init__(self, clos, env, k):
         assert isinstance(clos, Closure)
@@ -123,7 +145,9 @@ class closure_k(Cont):
         self.eval_env = env
         self.k = k
     def plug_reduce(self, v):
-        return Trampoline(self.clos.body, self.clos.env.extend(self.clos.var.string_value, v), self.k)
+        return Trampoline(self.clos.body,
+                          self.clos.env.extend(self.clos.var.string_value, v),
+                          self.k)
 
 class Closure(Value):
     def __init__(self, body, var, env):
@@ -232,6 +256,14 @@ def zero_huh(v):
     else:
         return false
 
+stdin = sio.fdopen_as_stream(0, "r")
+class Read(Value):
+    def evaluate(self, rest_exps, env, k):
+        val = stdin.readline()
+        import pdb
+        pdb.set_trace()
+        return k.plug_reduce(val)
+
 class app_k(Cont):
     def __init__(self, rest_exps, env, k):
         self.rest_exps = rest_exps
@@ -253,7 +285,7 @@ class Done(Exception):
 def initial_environment():
     env = Environment()
     env = env.extend_mult(['lambda', 'let', 'if', 'true', 'false',
-                           'zero?', '+', '-', 'cons', 'car', 'cdr', '*', 'call/cc'],
+                           'zero?', '+', '-', 'cons', 'car', 'cdr', '*', 'call/cc', 'fix', 'read'],
                           [Lambda(), Let(), If(), true, false, zero_huh(), add(),
-                           sub(), cons(), car(), cdr(), mult(), Callcc()])
+                           sub(), cons(), car(), cdr(), mult(), Callcc(), Fix(), Read()])
     return env
