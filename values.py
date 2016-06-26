@@ -21,7 +21,7 @@ class Cont(Value):
 class Number(Value):
     def __init__(self, num):
         self.number_value = num
-    def __str__(self):
+    def tostring(self):
         return str(self.number_value)
 
 class Environment(Value):
@@ -56,8 +56,6 @@ class Lambda(Value):
         arg = rest_exps[0][0]
         body = rest_exps[1]
         return k.plug_reduce(Closure(body, arg, env))
-    def __str__(self):
-        return 'value: native lambda'
 
 class CapturedCont(Value):
     def __init__(self, k):
@@ -114,8 +112,6 @@ class Let(Value):
         val_exp = rest_exps[0][1]
         body_exp = rest_exps[1]
         return Trampoline(val_exp, env, let_k(var, body_exp, env, k))
-    def __str__(self):
-        return 'value: native let'
 
 class fix_k(Cont):
     def __init__(self, var, body, env, k):
@@ -135,8 +131,6 @@ class Fix(Value):
         val_exp = rest_exps[0][1]
         body_exp = rest_exps[1]
         return Trampoline(val_exp, env, fix_k(var, body_exp, env, k))
-    def __str__(self):
-        return 'value: native fix'
 
 class closure_k(Cont):
     def __init__(self, clos, env, k):
@@ -154,12 +148,9 @@ class Closure(Value):
         self.body = body
         self.var = var
         self.env = env
-    def __str__(self):
-        return 'value: closure'
     def evaluate(self, rest_exps, env, k):
         rand = rest_exps[0]
         return Trampoline(rand, env, closure_k(self, env, k))
-
 
 class If(Value):
     def evaluate(self, rest_exps, env, k):
@@ -257,12 +248,18 @@ def zero_huh(v):
         return false
 
 stdin = sio.fdopen_as_stream(0, "r")
+stdout = sio.fdopen_as_stream(1, "w", buffering=1)
+
 class Read(Value):
     def evaluate(self, rest_exps, env, k):
-        val = stdin.readline()
-        import pdb
-        pdb.set_trace()
+        val = Number(int(stdin.readline()[:-1]))
         return k.plug_reduce(val)
+
+@prim_one_arg
+def display(v):
+    stdout.write(str(v.number_value)+'\n')
+    stdout.flush()
+    return v
 
 class app_k(Cont):
     def __init__(self, rest_exps, env, k):
@@ -285,7 +282,9 @@ class Done(Exception):
 def initial_environment():
     env = Environment()
     env = env.extend_mult(['lambda', 'let', 'if', 'true', 'false',
-                           'zero?', '+', '-', 'cons', 'car', 'cdr', '*', 'call/cc', 'fix', 'read'],
+                           'zero?', '+', '-', 'cons', 'car', 'cdr', '*', 'call/cc',
+                           'fix', 'read', 'display'],
                           [Lambda(), Let(), If(), true, false, zero_huh(), add(),
-                           sub(), cons(), car(), cdr(), mult(), Callcc(), Fix(), Read()])
+                           sub(), cons(), car(), cdr(), mult(), Callcc(),
+                           Fix(), Read(), display()])
     return env

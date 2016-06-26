@@ -1,0 +1,5 @@
+(let (y 20)
+  (fix (fact (lambda (x) (if (zero? x) 1 (* x (fact (- x 1))))))
+       (let (z 500)
+         (fix (rec (lambda (z) (if (zero? z) (fact y) ((lambda (s) (rec (- z 1))) (fact y)))))
+              (rec z)))))

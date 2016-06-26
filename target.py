@@ -8,7 +8,12 @@ import pdb
 
 from rpython.rlib.jit import JitDriver
 
-jitdriver = JitDriver(greens=['exp'], reds=['env', 'k'])
+def get_printable_location(exp):
+    return exp.tostring()
+
+jitdriver = JitDriver(greens=['exp'],
+                      reds=['env', 'k'],
+                      get_printable_location=get_printable_location)
 
 def eval(tramp):
     exp = tramp.exp
