@@ -4,11 +4,14 @@
 from ast import *
 from rpython.rlib import streamio as sio
 
-class Trampoline(object):
-    def __init__(self, exp, env, kont):
-        self.exp = exp
-        self.env = env
-        self.kont = kont
+def trampoline(exp, env, cont):
+    return (exp, env, cont)
+def tramp_exp(t):
+    return t[0]
+def tramp_env(t):
+    return t[1]
+def tramp_cont(t):
+    t[2]
 
 class Value(object):
     def evaluate(self, rest_exps, env, k):
@@ -61,7 +64,7 @@ class CapturedCont(Value):
     def __init__(self, k):
         self.k = k
     def evaluate(self, rest_exps, env, k):
-        return Trampoline(rest_exps[0], env, self.k)
+        return trampoline(rest_exps[0], env, self.k)
 
 class callcc_k(Cont):
     def __init__(self, env, k):
@@ -75,7 +78,7 @@ class callcc_k(Cont):
 class Callcc(Value):
     def evaluate(self, rest_exps, env, k):
         arg = rest_exps[0]
-        return Trampoline(arg, env, callcc_k(env, k))
+        return trampoline(arg, env, callcc_k(env, k))
 
 class CaptEnv(Value):
     def evaluate(self, rest_exps, env, k):
@@ -87,13 +90,13 @@ class withenv_k(Cont):
         self.env = env
         self.k = k
     def plug_reduce(self, v):
-        return Trampoline(self.exp, v, self.k)
+        return trampoline(self.exp, v, self.k)
 
 class WithEnv(Value):
     def evaluate(self, rest_exps, env, k):
         env_exp = rest_exps[0]
         eval_exp = rest_exps[1]
-        return Trampoline(evn_exp, env, withenv_k(eval_exp, env, k))
+        return trampoline(evn_exp, env, withenv_k(eval_exp, env, k))
 
 class let_k(Cont):
     def __init__(self, var, body, env, k):
@@ -103,7 +106,7 @@ class let_k(Cont):
         self.k = k
     def plug_reduce(self, v):
         new_env = self.env.extend(self.var.string_value, v)
-        return Trampoline(self.body, new_env, self.k)
+        return trampoline(self.body, new_env, self.k)
 
 
 class Let(Value):
@@ -111,7 +114,7 @@ class Let(Value):
         var = rest_exps[0][0]
         val_exp = rest_exps[0][1]
         body_exp = rest_exps[1]
-        return Trampoline(val_exp, env, let_k(var, body_exp, env, k))
+        return trampoline(val_exp, env, let_k(var, body_exp, env, k))
 
 class fix_k(Cont):
     def __init__(self, var, body, env, k):
@@ -123,14 +126,14 @@ class fix_k(Cont):
         new_env = self.env.extend(self.var.string_value, v)
         assert isinstance(v, Closure)
         v.env = new_env
-        return Trampoline(self.body, new_env, self.k)
+        return trampoline(self.body, new_env, self.k)
 
 class Fix(Value):
     def evaluate(self, rest_exps, env, k):
         var = rest_exps[0][0]
         val_exp = rest_exps[0][1]
         body_exp = rest_exps[1]
-        return Trampoline(val_exp, env, fix_k(var, body_exp, env, k))
+        return trampoline(val_exp, env, fix_k(var, body_exp, env, k))
 
 class closure_k(Cont):
     def __init__(self, clos, env, k):
@@ -139,7 +142,7 @@ class closure_k(Cont):
         self.eval_env = env
         self.k = k
     def plug_reduce(self, v):
-        return Trampoline(self.clos.body,
+        return trampoline(self.clos.body,
                           self.clos.env.extend(self.clos.var.string_value, v),
                           self.k)
 
