@@ -23,7 +23,7 @@ def eval(t):
     elif type(exp) is SymbolAST:
         return k.plug_reduce(env.apply(exp.string_value))
     elif type(exp) is SexpAST:
-        exp, env, k = exp[0], env, app_k(exp.children[1:], env, k)
+        exp, env, k = exp[0], env, app_k(exp, env, k)
         jitdriver.can_enter_jit(exp=exp, env=env, k=k)
         return trampoline(exp, env, k)
     else:

@@ -14,7 +14,7 @@ def tramp_cont(t):
     t[2]
 
 class Value(object):
-    def evaluate(self, rest_exps, env, k):
+    def evaluate(self, exp, env, k):
         raise NotImplementedError("Abstract base class")
 
 class Cont(Value):
@@ -55,16 +55,16 @@ class Environment(Value):
         return ne
 
 class Lambda(Value):
-    def evaluate(self, rest_exps, env, k):
-        arg = rest_exps[0][0]
-        body = rest_exps[1]
+    def evaluate(self, exp, env, k):
+        arg = exp[1][0]
+        body = exp[2]
         return k.plug_reduce(Closure(body, arg, env))
 
 class CapturedCont(Value):
     def __init__(self, k):
         self.k = k
-    def evaluate(self, rest_exps, env, k):
-        return trampoline(rest_exps[0], env, self.k)
+    def evaluate(self, exp, env, k):
+        return trampoline(exp[1], env, self.k)
 
 class callcc_k(Cont):
     def __init__(self, env, k):
@@ -76,12 +76,12 @@ class callcc_k(Cont):
         return ck.plug_reduce(CapturedCont(self.k))
 
 class Callcc(Value):
-    def evaluate(self, rest_exps, env, k):
-        arg = rest_exps[0]
+    def evaluate(self, exp, env, k):
+        arg = exp[1]
         return trampoline(arg, env, callcc_k(env, k))
 
 class CaptEnv(Value):
-    def evaluate(self, rest_exps, env, k):
+    def evaluate(self, exp, env, k):
         return k.plug_reduce(env)
 
 class withenv_k(Cont):
@@ -93,9 +93,9 @@ class withenv_k(Cont):
         return trampoline(self.exp, v, self.k)
 
 class WithEnv(Value):
-    def evaluate(self, rest_exps, env, k):
-        env_exp = rest_exps[0]
-        eval_exp = rest_exps[1]
+    def evaluate(self, exp, env, k):
+        env_exp = exp[1]
+        eval_exp = exp[2]
         return trampoline(evn_exp, env, withenv_k(eval_exp, env, k))
 
 class let_k(Cont):
@@ -110,10 +110,10 @@ class let_k(Cont):
 
 
 class Let(Value):
-    def evaluate(self, rest_exps, env, k):
-        var = rest_exps[0][0]
-        val_exp = rest_exps[0][1]
-        body_exp = rest_exps[1]
+    def evaluate(self, exp, env, k):
+        var = exp[1][0]
+        val_exp = exp[1][1]
+        body_exp = exp[2]
         return trampoline(val_exp, env, let_k(var, body_exp, env, k))
 
 class fix_k(Cont):
@@ -129,10 +129,10 @@ class fix_k(Cont):
         return trampoline(self.body, new_env, self.k)
 
 class Fix(Value):
-    def evaluate(self, rest_exps, env, k):
-        var = rest_exps[0][0]
-        val_exp = rest_exps[0][1]
-        body_exp = rest_exps[1]
+    def evaluate(self, exp, env, k):
+        var = exp[1][0]
+        val_exp = exp[1][1]
+        body_exp = exp[2]
         return trampoline(val_exp, env, fix_k(var, body_exp, env, k))
 
 class closure_k(Cont):
@@ -151,14 +151,16 @@ class Closure(Value):
         self.body = body
         self.var = var
         self.env = env
-    def evaluate(self, rest_exps, env, k):
-        rand = rest_exps[0]
-        return Trampoline(rand, env, closure_k(self, env, k))
+    def evaluate(self, exp, env, k):
+        rand = exp[1]
+        return trampoline(rand, env, closure_k(self, env, k))
 
 class If(Value):
-    def evaluate(self, rest_exps, env, k):
-        ch, th, el = rest_exps
-        return Trampoline(ch, env, if_k(th, el, env, k))
+    def evaluate(self, exp, env, k):
+        ch = exp[1]
+        th = exp[2]
+        el = exp[3]
+        return trampoline(ch, env, if_k(th, el, env, k))
 
 class if_k(Cont):
     def __init__(self, th, el, env, k):
@@ -168,9 +170,9 @@ class if_k(Cont):
         self.k = k
     def plug_reduce(self, v):
         if v == true: #TODO
-            return Trampoline(self.th, self.env, self.k)
+            return trampoline(self.th, self.env, self.k)
         else:
-            return Trampoline(self.el, self.env, self.k)
+            return trampoline(self.el, self.env, self.k)
 
 class Cell(Value):
     def __init__(self, car, cdr):
@@ -188,8 +190,8 @@ def prim_one_arg(func):
             return self.k.plug_reduce(func(v))
 
     class prim_eval(Value):
-        def evaluate(self, rest_exps, env, k):
-            return Trampoline(rest_exps[0], env, prim_k(env, k))
+        def evaluate(self, exp, env, k):
+            return trampoline(exp[1], env, prim_k(env, k))
     return prim_eval
 
 def prim_two_arg(func):
@@ -199,7 +201,7 @@ def prim_two_arg(func):
             self.env = env
             self.k = k
         def plug_reduce(self, v):
-            return Trampoline(self.exp2, self.env, prim_k2(v, self.env, self.k))
+            return trampoline(self.exp2, self.env, prim_k2(v, self.env, self.k))
 
     class prim_k2(Cont):
         def __init__(self, v1, env, k):
@@ -210,8 +212,8 @@ def prim_two_arg(func):
             return self.k.plug_reduce(func(self.v1, v))
 
     class prim_eval(Value):
-        def evaluate(self, rest_exps, env, k):
-            return Trampoline(rest_exps[0], env, prim_k1(rest_exps[1], env, k))
+        def evaluate(self, exp, env, k):
+            return trampoline(exp[1], env, prim_k1(exp[2], env, k))
     return prim_eval
 
 nil = None
@@ -254,7 +256,7 @@ stdin = sio.fdopen_as_stream(0, "r")
 stdout = sio.fdopen_as_stream(1, "w", buffering=1)
 
 class Read(Value):
-    def evaluate(self, rest_exps, env, k):
+    def evaluate(self, exp, env, k):
         val = Number(int(stdin.readline()[:-1]))
         return k.plug_reduce(val)
 
@@ -265,12 +267,12 @@ def display(v):
     return v
 
 class app_k(Cont):
-    def __init__(self, rest_exps, env, k):
-        self.rest_exps = rest_exps
+    def __init__(self, exp, env, k):
+        self.exp = exp
         self.env = env
         self.k = k
     def plug_reduce(self, v):
-        return v.evaluate(self.rest_exps, self.env, self.k)
+        return v.evaluate(self.exp, self.env, self.k)
 
 class halt_k(Cont):
     def __init__(self):
