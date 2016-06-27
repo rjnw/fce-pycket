@@ -1,4 +1,6 @@
 class AST(object):
+    _immutable_fields_ = ['string_value', 'number_value', 'children']
+    #TODO fix parse to make the array immutable as well
     pass
 
 class SymbolAST(AST):
