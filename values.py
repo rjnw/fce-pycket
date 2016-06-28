@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 #
 from ast import *
-from rpython.rlib import streamio as sio
+from rpython.rlib import streamio, jit
+
 
 def trampoline(exp, env, cont):
     return (exp, env, cont)
@@ -36,12 +37,15 @@ class Environment(Value):
         self.val_arr = None
         self.var_map = {}
         self.prev = prev
+
+    @jit.elidable
     def apply(self, key):
         index = self.lookup(key)
         if index == -1:
             return self.prev.apply(key)
         else:
             return self.val_arr[index]
+    @jit.elidable
     def lookup(self, key):
         return self.var_map.get(key, -1)
     def extend(self, key, value):
@@ -273,8 +277,8 @@ def zero_huh(v):
     else:
         return false
 
-stdin = sio.fdopen_as_stream(0, "r")
-stdout = sio.fdopen_as_stream(1, "w", buffering=1)
+stdin = streamio.fdopen_as_stream(0, "r")
+stdout = streamio.fdopen_as_stream(1, "w", buffering=1)
 
 class Read(Value):
     def evaluate(self, exp, env, k):
