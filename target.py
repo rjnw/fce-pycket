@@ -16,18 +16,21 @@ jitdriver = JitDriver(greens=['exp'],
                       get_printable_location=get_printable_location)
 
 def eval(t):
-    exp, env, k = t
-    jitdriver.jit_merge_point(exp=exp, env=env, k=k)
-    if type(exp) is NumberAST:
-        return k.plug_reduce(Number(exp.number_value))
-    elif type(exp) is SymbolAST:
-        return k.plug_reduce(env.apply(exp.string_value))
-    elif type(exp) is SexpAST:
-        exp, env, k = exp[0], env, app_k(exp, env, k)
-        jitdriver.can_enter_jit(exp=exp, env=env, k=k)
-        return trampoline(exp, env, k)
-    else:
-        raise Exception('Unknown AST')
+    while True:
+        exp, env, k = t
+        jitdriver.jit_merge_point(exp=exp, env=env, k=k)
+
+        if type(exp) is NumberAST:
+            t = k.plug_reduce(Number(exp.number_value))
+        elif type(exp) is SymbolAST:
+            t = k.plug_reduce(env.apply(exp.string_value))
+
+        elif type(exp) is SexpAST:
+            exp, env, k = exp[0], env, app_k(exp, env, k)
+            jitdriver.can_enter_jit(exp=exp, env=env, k=k)
+            t = trampoline(exp, env, k)
+        else:
+            raise Exception('Unknown AST')
 
 def jitpolicy(driver):
     from rpython.jit.codewriter.policy import JitPolicy
@@ -45,8 +48,7 @@ def entry_point(argv):
     os.close(fp)
     tramp = trampoline(convert_to_ast(src), initial_environment(), halt_k())
     try:
-        while True:
-            tramp = eval(tramp)
+        eval(tramp)
     except Done, e:
         print str(e.value.number_value)
         return 0

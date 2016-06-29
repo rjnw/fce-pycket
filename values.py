@@ -32,7 +32,7 @@ class Number(Value):
 
 #TODO fix prev of top level to raise exception if not found
 class Environment(Value):
-    _immutable_fields_ = ['val_arr[*]', 'var_map[*]', 'prev']
+    _immutable_fields_ = ['val_arr[*]', 'var_map', 'prev']
     def __init__(self, prev=None):
         self.val_arr = None
         self.var_map = {}
@@ -45,15 +45,17 @@ class Environment(Value):
             return self.prev.apply(key)
         else:
             return self.val_arr[index]
-    @jit.elidable
+
     def lookup(self, key):
         return self.var_map.get(key, -1)
+
     def extend(self, key, value):
         ne = Environment()
         ne.prev = self
         ne.val_arr = [value]
         ne.var_map[key] = 0
         return ne
+
     def extend_mult(self, keys, values):
         ne = Environment()
         ne.prev = self
