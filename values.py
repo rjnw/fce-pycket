@@ -30,38 +30,32 @@ class Number(Value):
     def tostring(self):
         return str(self.number_value)
 
+@jit.elidable
+def make_env_map(vars):
+    var_map = {}
+    for i, k in enumerate(vars):
+        var_map[k] = i
+    return var_map
+
 #TODO fix prev of top level to raise exception if not found
 class Environment(Value):
     _immutable_fields_ = ['val_arr[*]', 'var_map', 'prev']
-    def __init__(self, prev=None):
-        self.val_arr = None
-        self.var_map = {}
+    def __init__(self, var_map, values, prev=None):
+        self.val_arr = values
+        self.var_map = var_map
         self.prev = prev
 
     @jit.elidable
-    def apply(self, key):
-        index = self.lookup(key)
+    def lookup(self, key):
+        index = self.var_map.get(key, -1)
         if index == -1:
-            return self.prev.apply(key)
+            return self.prev.lookup(key)
         else:
             return self.val_arr[index]
 
-    def lookup(self, key):
-        return self.var_map.get(key, -1)
-
     def extend(self, key, value):
-        ne = Environment()
-        ne.prev = self
-        ne.val_arr = [value]
-        ne.var_map[key] = 0
-        return ne
-
-    def extend_mult(self, keys, values):
-        ne = Environment()
-        ne.prev = self
-        ne.val_arr = values
-        for i,k in enumerate(keys):
-            ne.var_map[k] = i
+        evm = make_env_map([key])
+        ne = Environment(evm, [value], self)
         return ne
 
 class Lambda(Value):
@@ -126,7 +120,6 @@ class let_k(Cont):
         new_env = self.env.extend(self.var.string_value, v)
         return trampoline(self.body, new_env, self.k)
 
-
 class Let(Value):
     _immutable_fields_ = ['exp', 'env', 'k']
     def evaluate(self, exp, env, k):
@@ -163,9 +156,9 @@ class closure_k(Cont):
         #self.eval_env = env
         self.k = k
     def plug_reduce(self, v):
-        return trampoline(self.clos.body,
-                          self.clos.menv.extend(self.clos.var.string_value, v),
-                          self.k)
+        return (self.clos.body,
+                Environment(self.clos.env_var_map, [v], self.clos.menv),
+                self.k)
 
 class Closure(Value):
     _immutable_fields_ = ['body', 'var', 'k']
@@ -173,6 +166,7 @@ class Closure(Value):
         self.body = body
         self.var = var
         self.menv = env
+        self.env_var_map = make_env_map([self.var.string_value])
     def evaluate(self, exp, env, k):
         rand = exp[1]
         return trampoline(rand, env, closure_k(self, env, k))
@@ -313,11 +307,11 @@ class Done(Exception):
         self.value = val
 
 def initial_environment():
-    env = Environment()
-    env = env.extend_mult(['lambda', 'let', 'if', 'true', 'false',
+    env_var_map = make_env_map(['lambda', 'let', 'if', 'true', 'false',
                            'zero?', '+', '-', 'cons', 'car', 'cdr', '*', 'call/cc',
-                           'fix', 'read', 'display'],
-                          [Lambda(), Let(), If(), true, false, zero_huh(), add(),
-                           sub(), cons(), car(), cdr(), mult(), Callcc(),
-                           Fix(), Read(), display()])
+                           'fix', 'read', 'display'])
+    env = Environment(env_var_map,
+                      [Lambda(), Let(), If(), true, false, zero_huh(), add(),
+                       sub(), cons(), car(), cdr(), mult(), Callcc(),
+                       Fix(), Read(), display()])
     return env

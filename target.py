@@ -23,7 +23,7 @@ def eval(t):
         if type(exp) is NumberAST:
             t = k.plug_reduce(Number(exp.number_value))
         elif type(exp) is SymbolAST:
-            t = k.plug_reduce(env.apply(exp.string_value))
+            t = k.plug_reduce(env.lookup(exp.string_value))
 
         elif type(exp) is SexpAST:
             exp, env, k = exp[0], env, app_k(exp, env, k)
