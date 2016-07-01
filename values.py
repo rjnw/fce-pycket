@@ -37,7 +37,10 @@ def make_env_map(vars):
         var_map[k] = i
     return var_map
 
-#TODO fix prev of top level to raise exception if not found
+@jit.elidable
+def get_env_index(var_map, var):
+    return var_map.get(var, -1)
+
 class Environment(Value):
     _immutable_fields_ = ['val_arr[*]', 'var_map', 'prev']
     def __init__(self, var_map, values, prev=None):
@@ -47,7 +50,7 @@ class Environment(Value):
 
     @jit.elidable
     def lookup(self, key):
-        index = self.var_map.get(key, -1)
+        index = get_env_index(self.var_map, key)
         if index == -1:
             return self.prev.lookup(key)
         else:
@@ -116,8 +119,9 @@ class let_k(Cont):
         self.body = body
         self.env = env
         self.k = k
+        self.env_var_map = make_env_map([self.var.string_value])
     def plug_reduce(self, v):
-        new_env = self.env.extend(self.var.string_value, v)
+        new_env = Environment(self.env_var_map, [v], self.env)
         return trampoline(self.body, new_env, self.k)
 
 class Let(Value):
@@ -153,7 +157,6 @@ class closure_k(Cont):
     def __init__(self, clos, env, k):
         assert isinstance(clos, Closure)
         self.clos = clos
-        #self.eval_env = env
         self.k = k
     def plug_reduce(self, v):
         return (self.clos.body,
@@ -306,6 +309,7 @@ class Done(Exception):
     def __init__(self, val):
         self.value = val
 
+#TODO fix prev of top level to raise exception if not found
 def initial_environment():
     env_var_map = make_env_map(['lambda', 'let', 'if', 'true', 'false',
                            'zero?', '+', '-', 'cons', 'car', 'cdr', '*', 'call/cc',
