@@ -32,14 +32,14 @@ class Number(Value):
 
 @jit.elidable_promote('all')
 def make_env_map(vars):
-    var_map = {}
-    for i, k in enumerate(vars):
-        var_map[k] = i
-    return var_map
+    return vars
 
 @jit.elidable_promote('all')
 def get_env_index(var_map, var):
-    return var_map.get(var, -1)
+    for i, v in enumerate(var_map):
+        if v == var:
+            return i
+    return -1
 
 class Environment(Value):
     _immutable_fields_ = ['val_arr[*]', 'var_map', 'prev']
