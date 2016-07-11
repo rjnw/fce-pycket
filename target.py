@@ -16,23 +16,10 @@ jitdriver = JitDriver(greens=['exp'],
                       get_printable_location=get_printable_location)
 
 def eval(t):
+    exp, env, k = t
     while True:
-        exp, env, k = t
         jitdriver.jit_merge_point(exp=exp, env=env, k=k)
-        if type(exp) is NumberAST:
-            t = k.plug_reduce(Number(exp.number_value))
-        elif type(exp) is SymbolAST:
-            t = k.plug_reduce(env.lookup(exp.string_value))
-        elif type(exp) is SexpAST and type(exp[0]) is SymbolAST:
-            ev = env.lookup(exp[0].string_value)
-            t = ev.evaluate(exp, env, k)
-            exp,env,k = t
-        elif type(exp) is SexpAST:
-            exp, env, k = exp[0], env, app_k(exp, env, k)
-            t = (exp, env, k)
-        else:
-            raise Exception('Unknown AST')
-        exp,env,k = t
+        exp, env, k = exp.eval(env, k)
         jitdriver.can_enter_jit(exp=exp, env=env, k=k)
 
 def jitpolicy(driver):
