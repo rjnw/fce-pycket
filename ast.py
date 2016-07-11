@@ -1,13 +1,13 @@
 from values import Number, app_k
 
 class AST(object):
-    _immutable_fields_ = ['string_value', 'number_value', 'children[*]']
-    #TODO fix parse to make the array immutable as well
+    _immutable_fields_ = ['string_value', 'number_value', 'children[*]', 'should_enter']
     pass
 
 class SymbolAST(AST):
     def __init__(self, symbol_str):
         self.string_value = symbol_str
+        self.should_enter = False
     def tostring(self):
         return self.string_value
     def eval(self, env, k):
@@ -16,6 +16,7 @@ class SymbolAST(AST):
 class NumberAST(AST):
     def __init__(self, num):
         self.number_value = Number(num)
+        self.should_enter = False
     def tostring(self):
         return str(self.number_value.number_value)
     def eval(self, env, k):
@@ -32,6 +33,7 @@ class SexpAST(AST):
     _immutable_fields_ = ['children[*]', '_eval']
     def __init__(self, children):
         self.children = children
+        self.should_enter = False
         if type(self.children[0]) is SymbolAST:
             self._eval = simple_sexp_eval
         else:

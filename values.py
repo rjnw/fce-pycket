@@ -3,7 +3,7 @@
 #
 from ast import *
 from rpython.rlib import streamio, jit
-
+import time
 
 def trampoline(exp, env, cont):
     return (exp, env, cont)
@@ -66,6 +66,7 @@ class Lambda(Value):
     def evaluate(self, exp, env, k):
         arg = exp[1][0]
         body = exp[2]
+        body.should_enter = True
         return k.plug_reduce(Closure(body, arg, env))
 
 class CapturedCont(Value):
@@ -127,8 +128,8 @@ class let_k(Cont):
 class Let(Value):
     _immutable_fields_ = ['exp', 'env', 'k']
     def evaluate(self, exp, env, k):
-        var = exp[1][0]
-        val_exp = exp[1][1]
+        var = exp[1][0][0]
+        val_exp = exp[1][0][1]
         body_exp = exp[2]
         return trampoline(val_exp, env, let_k(var, body_exp, env, k))
 
@@ -150,8 +151,8 @@ class fix_k(Cont):
 
 class Fix(Value):
     def evaluate(self, exp, env, k):
-        var = exp[1][0]
-        val_exp = exp[1][1]
+        var = exp[1][0][0]
+        val_exp = exp[1][0][1]
         body_exp = exp[2]
         return trampoline(val_exp, env, fix_k(var, body_exp, env, k))
 
@@ -302,6 +303,20 @@ class Read(Value):
         val = Number(int(stdin.readline()[:-1]))
         return k.plug_reduce(val)
 
+class time_k(Cont):
+    def __init__(self, init_time, env, k):
+        self.k = k
+        self.init_time = init_time
+    def plug_reduce(self, v):
+        final_time = time.clock()
+        stdout.write('time: ' + str(int((final_time - self.init_time) * 1000))+'ms.\n')
+        return self.k.plug_reduce(v)
+        
+class Time(Value):
+    def evaluate(self, exp, env, k):
+        init_time = time.clock()
+        return exp[1], env, time_k(init_time, env, k)
+
 @prim_one_arg
 def display(v):
     stdout.write(str(v.number_value)+'\n')
@@ -347,10 +362,10 @@ class TopLevelEnvironment(Value):
 def initial_environment():
     names = ['lambda', 'let', 'if', 'true', 'false',
                    'zero?', '+', '-', 'cons', 'car', 'cdr', '*', 'call/cc',
-                   'fix', 'read', 'display']
+                   'fix', 'read', 'display', 'time']
     values = [Lambda(), Let(), If(), true, false, zero_huh(), add(),
                        sub(), cons(), car(), cdr(), mult(), Callcc(),
-                       Fix(), Read(), display()]
+                       Fix(), Read(), display(), Time()]
 
     env = TopLevelEnvironment(names, values)
     return env

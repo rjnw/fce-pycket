@@ -20,7 +20,8 @@ def eval(t):
     while True:
         jitdriver.jit_merge_point(exp=exp, env=env, k=k)
         exp, env, k = exp.eval(env, k)
-        jitdriver.can_enter_jit(exp=exp, env=env, k=k)
+        if exp.should_enter == True:
+            jitdriver.can_enter_jit(exp=exp, env=env, k=k)
 
 def jitpolicy(driver):
     from rpython.jit.codewriter.policy import JitPolicy
