@@ -11,7 +11,7 @@ def parse_exp(st, curr_ind):
             curr_ind = i
             tokens.append(t)
         curr_ind += 1
-        ast = SexpAST(tokens)
+        ast = SexpAST(list(tokens))
     # elif st[curr_ind] == "'":
     #     t,i = parse_exp(st, curr_ind+1)
     #     return ('quote', t), i

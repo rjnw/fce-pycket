@@ -42,7 +42,7 @@ def get_env_index(var_map, var):
     return -1
 
 class Environment(Value):
-    _immutable_fields_ = ['val_arr[*]', 'var_map', 'prev']
+    _immutable_fields_ = ['val_arr[*]', 'var_map[*]', 'prev']
     def __init__(self, var_map, values, prev=None):
         self.val_arr = values
         self.var_map = var_map
@@ -182,23 +182,19 @@ class Closure(Value):
 
 class If(Value):
     def evaluate(self, exp, env, k):
-        ch = exp[1]
-        th = exp[2]
-        el = exp[3]
-        return trampoline(ch, env, if_k(th, el, env, k))
+        return trampoline(exp[1], env, if_k(exp, env, k))
 
 class if_k(Cont):
-    _immutable_fields_ = ['th', 'el', 'env', 'k']
-    def __init__(self, th, el, env, k):
-        self.th = th
-        self.el = el
+    _immutable_fields_ = ['exp', 'env', 'k']
+    def __init__(self, exp, env, k):
+        self.exp = exp
         self.env = env
         self.k = k
     def plug_reduce(self, v):
-        if v == true: 
-            return trampoline(self.th, self.env, self.k)
+        if v == true:
+            return trampoline(self.exp[2], self.env, self.k)
         else:
-            return trampoline(self.el, self.env, self.k)
+            return trampoline(self.exp[3], self.env, self.k)
 
 class Cell(Value):
     def __init__(self, car, cdr):
@@ -332,16 +328,16 @@ class Done(Exception):
         self.value = val
 
 class TopLevelEnvironment(Value):
-    _immutable_fields_ = ['values[*]', 'var_map']
+    _immutable_fields_ = ['val_arr[*]', 'var_map']
     def __init__(self, names, values):
         self.var_map = {}
         for i, v in enumerate(names):
             self.var_map[v] = i
-        self.values = values
+        self.val_arr = values
 
     @jit.elidable_promote('all')
     def lookup(self, key):
-        return self.values[self.get_index(key)]
+        return self.val_arr[self.get_index(key)]
 
     def get_index(self, key):
         return self.var_map[key]
