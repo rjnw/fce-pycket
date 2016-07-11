@@ -140,10 +140,13 @@ class fix_k(Cont):
         self.env = env
         self.k = k
     def plug_reduce(self, v):
-        new_env = self.env.extend(self.var.string_value, v)
         assert isinstance(v, Closure)
-        v.menv = new_env
-        return trampoline(self.body, new_env, self.k)
+        new_v = Closure(v.body, v.var, v.env, self.var.string_value)
+        if self.env == v.env:
+            return trampoline(self.body, new_v.env, self.k)
+        else:
+            new_env = self.env.extend(self.var.string_value, new_v)
+            return trampoline(self.body, new_env, self.k)
 
 class Fix(Value):
     def evaluate(self, exp, env, k):
@@ -160,19 +163,22 @@ class closure_k(Cont):
         self.k = k
     def plug_reduce(self, v):
         return (self.clos.body,
-                Environment(self.clos.env_var_map, [v], self.clos.menv),
+                Environment(self.clos.env_var_map, [v], self.clos.env),
                 self.k)
 
 class Closure(Value):
-    _immutable_fields_ = ['body', 'var', 'k']
-    def __init__(self, body, var, env):
+    _immutable_fields_ = ['body', 'var', 'k', 'env', 'env_var_map[*]']
+    def __init__(self, body, var, env, fix=None):
         self.body = body
         self.var = var
-        self.menv = env
         self.env_var_map = make_env_map([self.var.string_value])
+        if fix is None:
+            self.env = env
+        else:
+            self.env = env.extend(fix, self)
     def evaluate(self, exp, env, k):
         rand = exp[1]
-        return trampoline(rand, env, closure_k(self, env, k))
+        return (rand, env, closure_k(self, env, k))
 
 class If(Value):
     def evaluate(self, exp, env, k):
@@ -325,13 +331,30 @@ class Done(Exception):
     def __init__(self, val):
         self.value = val
 
+class TopLevelEnvironment(Value):
+    _immutable_fields_ = ['values[*]', 'var_map']
+    def __init__(self, names, values):
+        self.var_map = {}
+        for i, v in enumerate(names):
+            self.var_map[v] = i
+        self.values = values
+
+    @jit.elidable_promote('all')
+    def lookup(self, key):
+        return self.values[self.get_index(key)]
+
+    def get_index(self, key):
+        return self.var_map[key]
+
+
 #TODO fix prev of top level to raise exception if not found
 def initial_environment():
-    env_var_map = make_env_map(['lambda', 'let', 'if', 'true', 'false',
-                           'zero?', '+', '-', 'cons', 'car', 'cdr', '*', 'call/cc',
-                           'fix', 'read', 'display'])
-    env = Environment(env_var_map,
-                      [Lambda(), Let(), If(), true, false, zero_huh(), add(),
+    names = ['lambda', 'let', 'if', 'true', 'false',
+                   'zero?', '+', '-', 'cons', 'car', 'cdr', '*', 'call/cc',
+                   'fix', 'read', 'display']
+    values = [Lambda(), Let(), If(), true, false, zero_huh(), add(),
                        sub(), cons(), car(), cdr(), mult(), Callcc(),
-                       Fix(), Read(), display()])
+                       Fix(), Read(), display()]
+
+    env = TopLevelEnvironment(names, values)
     return env
