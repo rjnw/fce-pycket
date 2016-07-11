@@ -30,14 +30,14 @@ class Number(Value):
     def tostring(self):
         return str(self.number_value)
 
-@jit.elidable
+@jit.elidable_promote('all')
 def make_env_map(vars):
     var_map = {}
     for i, k in enumerate(vars):
         var_map[k] = i
     return var_map
 
-@jit.elidable
+@jit.elidable_promote('all')
 def get_env_index(var_map, var):
     return var_map.get(var, -1)
 
@@ -48,7 +48,7 @@ class Environment(Value):
         self.var_map = var_map
         self.prev = prev
 
-    @jit.elidable
+    @jit.elidable_promote('all')
     def lookup(self, key):
         index = get_env_index(self.var_map, key)
         if index == -1:
@@ -201,6 +201,22 @@ class Cell(Value):
 
 class Bool(Value):
     pass
+
+class _prim_n(Cont):
+    def __init__(self, exp, current_n, total_n, value_array,  func, env, k):
+        self.exp = exp
+        self.n = current_n
+        self.N = total_n
+        self.values = value_array
+        self.func = func
+        self.env = env
+        self.k = k
+    def plug_reduce(self, v):
+        if self.n == self.N:
+            value_array[self.n - 1] = v
+            self.k.plug_reduce(func(value_array))
+        else:
+            exp[current_n+1], env, _prim_n(exp, current_n+1, total_n, value_array, func, env, k)
 
 def prim_one_arg(func):
     class prim_k(Cont):
