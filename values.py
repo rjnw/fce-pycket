@@ -15,7 +15,6 @@ def tramp_cont(t):
     t[2]
 
 class Value(object):
-    _immutable_fields_ = ['number_value', 'val_arr[*]', 'var_map[*]', 'prev', 'exp', 'env', 'k']
     def evaluate(self, exp, env, k):
         raise NotImplementedError("Abstract base class")
 
@@ -24,13 +23,11 @@ class Cont(Value):
         raise NotImplementedError("Abstract base class")
 
 class Number(Value):
-    _immutable_fields_ = ['number_value']
     def __init__(self, num):
         self.number_value = num
     def tostring(self):
         return str(self.number_value)
 
-@jit.elidable_promote('all')
 def make_env_map(vars):
     return vars
 
@@ -42,13 +39,11 @@ def get_env_index(var_map, var):
     return -1
 
 class Environment(Value):
-    _immutable_fields_ = ['val_arr[*]', 'var_map[*]', 'prev']
     def __init__(self, var_map, values, prev=None):
         self.val_arr = values
         self.var_map = var_map
         self.prev = prev
 
-    @jit.elidable_promote('all')
     def lookup(self, key):
         index = get_env_index(self.var_map, key)
         if index == -1:
@@ -62,7 +57,6 @@ class Environment(Value):
         return ne
 
 class Lambda(Value):
-    _immutable_fields_ = ['exp', 'env', 'k']
     def evaluate(self, exp, env, k):
         arg = exp[1][0]
         body = exp[2]
@@ -70,14 +64,12 @@ class Lambda(Value):
         return k.plug_reduce(Closure(body, arg, env))
 
 class CapturedCont(Value):
-    _immutable_fields_ = ['k']
     def __init__(self, k):
         self.k = k
     def evaluate(self, exp, env, k):
         return trampoline(exp[1], env, self.k)
 
 class callcc_k(Cont):
-    _immutable_fields_ = ['env', 'k']
     def __init__(self, env, k):
         self.env = env
         self.k = k
@@ -87,18 +79,15 @@ class callcc_k(Cont):
         return ck.plug_reduce(CapturedCont(self.k))
 
 class Callcc(Value):
-    _immutable_fields_ = ['exp', 'env', 'k']
     def evaluate(self, exp, env, k):
         arg = exp[1]
         return trampoline(arg, env, callcc_k(env, k))
 
 class CaptEnv(Value):
-    _immutable_fields_ = ['exp', 'env', 'k']
     def evaluate(self, exp, env, k):
         return k.plug_reduce(env)
 
 class withenv_k(Cont):
-    _immutable_fields_ = ['eval_exp', 'env', 'k']
     def __init__(self, eval_exp, env, k):
         self.exp = exp
         self.env = env
@@ -107,14 +96,12 @@ class withenv_k(Cont):
         return trampoline(self.exp, v, self.k)
 
 class WithEnv(Value):
-    _immutable_fields_ = ['exp', 'env', 'k']
     def evaluate(self, exp, env, k):
         env_exp = exp[1]
         eval_exp = exp[2]
         return trampoline(evn_exp, env, withenv_k(eval_exp, env, k))
 
 class let_k(Cont):
-    _immutable_fields_ = ['var', 'body', 'env', 'k']
     def __init__(self, var, body, env, k):
         self.var = var
         self.body = body
@@ -126,7 +113,6 @@ class let_k(Cont):
         return trampoline(self.body, new_env, self.k)
 
 class Let(Value):
-    _immutable_fields_ = ['exp', 'env', 'k']
     def evaluate(self, exp, env, k):
         var = exp[1][0][0]
         val_exp = exp[1][0][1]
@@ -134,7 +120,6 @@ class Let(Value):
         return trampoline(val_exp, env, let_k(var, body_exp, env, k))
 
 class fix_k(Cont):
-    _immutable_fields_ = ['var', 'body', 'env', 'k']
     def __init__(self, var, body, env, k):
         self.var = var
         self.body = body
@@ -157,7 +142,6 @@ class Fix(Value):
         return trampoline(val_exp, env, fix_k(var, body_exp, env, k))
 
 class closure_k(Cont):
-    _immutable_fields_ = ['clos', 'k']
     def __init__(self, clos, env, k):
         assert isinstance(clos, Closure)
         self.clos = clos
@@ -168,7 +152,6 @@ class closure_k(Cont):
                 self.k)
 
 class Closure(Value):
-    _immutable_fields_ = ['body', 'var', 'k', 'env', 'env_var_map[*]']
     def __init__(self, body, var, env, fix=None):
         self.body = body
         self.var = var
@@ -186,7 +169,6 @@ class If(Value):
         return trampoline(exp[1], env, if_k(exp, env, k))
 
 class if_k(Cont):
-    _immutable_fields_ = ['exp', 'env', 'k']
     def __init__(self, exp, env, k):
         self.exp = exp
         self.env = env
@@ -223,7 +205,6 @@ class _prim_n(Cont):
 
 def prim_one_arg(func):
     class prim_k(Cont):
-        _immutable_fields_ = ['env', 'k']
         def __init__(self, env, k):
             self.env = env
             self.k = k
@@ -237,7 +218,6 @@ def prim_one_arg(func):
 
 def prim_two_arg(func):
     class prim_k1(Cont):
-        _immutable_fields_ = ['exp2', 'env', 'k']
         def __init__(self, exp2, env, k):
             self.exp2 = exp2
             self.env = env
@@ -246,7 +226,6 @@ def prim_two_arg(func):
             return trampoline(self.exp2, self.env, prim_k2(v, self.env, self.k))
 
     class prim_k2(Cont):
-        _immutable_fields_ = ['v1', 'env', 'k']
         def __init__(self, v1, env, k):
             self.v1 = v1
             self.env = env
@@ -324,7 +303,6 @@ def display(v):
     return v
 
 class app_k(Cont):
-    _immutable_fields_ = ['exp', 'env', 'k']
     def __init__(self, exp, env, k):
         self.exp = exp
         self.env = env
@@ -343,14 +321,12 @@ class Done(Exception):
         self.value = val
 
 class TopLevelEnvironment(Value):
-    _immutable_fields_ = ['val_arr[*]', 'var_map']
     def __init__(self, names, values):
         self.var_map = {}
         for i, v in enumerate(names):
             self.var_map[v] = i
         self.val_arr = values
 
-    @jit.elidable_promote('all')
     def lookup(self, key):
         return self.val_arr[self.get_index(key)]
 
