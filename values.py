@@ -5,6 +5,7 @@ from ast import *
 from rpython.rlib import streamio, jit
 import time
 
+
 def trampoline(exp, env, cont):
     return (exp, env, cont)
 def tramp_exp(t):
@@ -39,6 +40,7 @@ def get_env_index(var_map, var):
     return -1
 
 class Environment(Value):
+    _immutable_fields_ = ['val_arr[*]', 'var_map', 'prev']
     def __init__(self, var_map, values, prev=None):
         self.val_arr = values
         self.var_map = var_map
@@ -321,6 +323,7 @@ class Done(Exception):
         self.value = val
 
 class TopLevelEnvironment(Value):
+    _immutable_fields_ = ['val_arr[*]', 'var_map']
     def __init__(self, names, values):
         self.var_map = {}
         for i, v in enumerate(names):
