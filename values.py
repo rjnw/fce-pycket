@@ -8,13 +8,13 @@ import time
 
 
 class Value(object):
+    _attrs_ = []
     _immutable_fields_ = ['exp', 'env', 'k', 'number_value', 'var', 'env_var_map']
 
     def evaluate(self, exp, env, k):
         raise NotImplementedError("Abstract base class")
 
 class Cont(Value):
-
     def plug_reduce(self, v):
         raise NotImplementedError("Abstract base class")
 
@@ -34,6 +34,14 @@ def get_env_index(var_map, var):
             return i
     return -1
 
+@jit.elidable
+def env_lookup(var_map, val_arr, key, prev):
+    index = get_env_index(var_map, key)
+    if index == -1:
+        return prev.lookup(key)
+    else:
+        return val_arr[index]
+
 class Environment(Value):
     _immutable_fields_ = ['val_arr[*]', 'var_map[*]', 'prev']
     def __init__(self, var_map, values, prev=None):
@@ -41,12 +49,9 @@ class Environment(Value):
         self.var_map = var_map
         self.prev = prev
 
+    @jit.elidable
     def lookup(self, key):
-        index = get_env_index(self.var_map, key)
-        if index == -1:
-            return self.prev.lookup(key)
-        else:
-            return self.val_arr[index]
+        return env_lookup(self.var_map, self.val_arr, key, self.prev)
 
     def extend(self, key, value):
         evm = make_env_map([key])
@@ -317,6 +322,10 @@ class Done(Exception):
     def __init__(self, val):
         self.value = val
 
+@jit.elidable_promote('all')
+def get_topenv_index(var_map, key):
+    return var_map[key]
+
 class TopLevelEnvironment(Value):
     _immutable_fields_ = ['val_arr[*]', 'var_map']
     def __init__(self, names, values):
@@ -326,10 +335,7 @@ class TopLevelEnvironment(Value):
         self.val_arr = values
 
     def lookup(self, key):
-        return self.val_arr[self.get_index(key)]
-
-    def get_index(self, key):
-        return self.var_map[key]
+        return self.val_arr[get_topenv_index(self.var_map, key)]
 
 
 #TODO fix prev of top level to raise exception if not found
