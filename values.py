@@ -3,23 +3,18 @@
 #
 from ast import *
 from rpython.rlib import streamio, jit
+from rpython.rlib.objectmodel import specialize
 import time
 
 
-def trampoline(exp, env, cont):
-    return (exp, env, cont)
-def tramp_exp(t):
-    return t[0]
-def tramp_env(t):
-    return t[1]
-def tramp_cont(t):
-    t[2]
-
 class Value(object):
+    _immutable_fields_ = ['exp', 'env', 'k', 'number_value', 'var', 'env_var_map']
+
     def evaluate(self, exp, env, k):
         raise NotImplementedError("Abstract base class")
 
 class Cont(Value):
+
     def plug_reduce(self, v):
         raise NotImplementedError("Abstract base class")
 
@@ -40,7 +35,7 @@ def get_env_index(var_map, var):
     return -1
 
 class Environment(Value):
-    _immutable_fields_ = ['val_arr[*]', 'var_map', 'prev']
+    _immutable_fields_ = ['val_arr[*]', 'var_map[*]', 'prev']
     def __init__(self, var_map, values, prev=None):
         self.val_arr = values
         self.var_map = var_map
@@ -69,7 +64,7 @@ class CapturedCont(Value):
     def __init__(self, k):
         self.k = k
     def evaluate(self, exp, env, k):
-        return trampoline(exp[1], env, self.k)
+        return (exp[1], env, self.k)
 
 class callcc_k(Cont):
     def __init__(self, env, k):
@@ -83,7 +78,7 @@ class callcc_k(Cont):
 class Callcc(Value):
     def evaluate(self, exp, env, k):
         arg = exp[1]
-        return trampoline(arg, env, callcc_k(env, k))
+        return (arg, env, callcc_k(env, k))
 
 class CaptEnv(Value):
     def evaluate(self, exp, env, k):
@@ -95,13 +90,13 @@ class withenv_k(Cont):
         self.env = env
         self.k = k
     def plug_reduce(self, v):
-        return trampoline(self.exp, v, self.k)
+        return (self.exp, v, self.k)
 
 class WithEnv(Value):
     def evaluate(self, exp, env, k):
         env_exp = exp[1]
         eval_exp = exp[2]
-        return trampoline(evn_exp, env, withenv_k(eval_exp, env, k))
+        return (evn_exp, env, withenv_k(eval_exp, env, k))
 
 class let_k(Cont):
     def __init__(self, var, body, env, k):
@@ -112,14 +107,14 @@ class let_k(Cont):
         self.env_var_map = make_env_map([self.var.string_value])
     def plug_reduce(self, v):
         new_env = Environment(self.env_var_map, [v], self.env)
-        return trampoline(self.body, new_env, self.k)
+        return (self.body, new_env, self.k)
 
 class Let(Value):
     def evaluate(self, exp, env, k):
         var = exp[1][0][0]
         val_exp = exp[1][0][1]
         body_exp = exp[2]
-        return trampoline(val_exp, env, let_k(var, body_exp, env, k))
+        return (val_exp, env, let_k(var, body_exp, env, k))
 
 class fix_k(Cont):
     def __init__(self, var, body, env, k):
@@ -131,17 +126,17 @@ class fix_k(Cont):
         assert isinstance(v, Closure)
         new_v = Closure(v.body, v.var, v.env, self.var.string_value)
         if self.env == v.env:
-            return trampoline(self.body, new_v.env, self.k)
+            return (self.body, new_v.env, self.k)
         else:
             new_env = self.env.extend(self.var.string_value, new_v)
-            return trampoline(self.body, new_env, self.k)
+            return (self.body, new_env, self.k)
 
 class Fix(Value):
     def evaluate(self, exp, env, k):
         var = exp[1][0][0]
         val_exp = exp[1][0][1]
         body_exp = exp[2]
-        return trampoline(val_exp, env, fix_k(var, body_exp, env, k))
+        return (val_exp, env, fix_k(var, body_exp, env, k))
 
 class closure_k(Cont):
     def __init__(self, clos, env, k):
@@ -168,7 +163,7 @@ class Closure(Value):
 
 class If(Value):
     def evaluate(self, exp, env, k):
-        return trampoline(exp[1], env, if_k(exp, env, k))
+        return (exp[1], env, if_k(exp, env, k))
 
 class if_k(Cont):
     def __init__(self, exp, env, k):
@@ -177,9 +172,9 @@ class if_k(Cont):
         self.k = k
     def plug_reduce(self, v):
         if v == true:
-            return trampoline(self.exp[2], self.env, self.k)
+            return (self.exp[2], self.env, self.k)
         else:
-            return trampoline(self.exp[3], self.env, self.k)
+            return (self.exp[3], self.env, self.k)
 
 class Cell(Value):
     def __init__(self, car, cdr):
@@ -215,17 +210,17 @@ def prim_one_arg(func):
 
     class prim_eval(Value):
         def evaluate(self, exp, env, k):
-            return trampoline(exp[1], env, prim_k(env, k))
+            return (exp[1], env, prim_k(env, k))
     return prim_eval
 
 def prim_two_arg(func):
     class prim_k1(Cont):
         def __init__(self, exp2, env, k):
-            self.exp2 = exp2
+            self.exp = exp2
             self.env = env
             self.k = k
         def plug_reduce(self, v):
-            return trampoline(self.exp2, self.env, prim_k2(v, self.env, self.k))
+            return (self.exp, self.env, prim_k2(v, self.env, self.k))
 
     class prim_k2(Cont):
         def __init__(self, v1, env, k):
@@ -237,7 +232,7 @@ def prim_two_arg(func):
 
     class prim_eval(Value):
         def evaluate(self, exp, env, k):
-            return trampoline(exp[1], env, prim_k1(exp[2], env, k))
+            return (exp[1], env, prim_k1(exp[2], env, k))
     return prim_eval
 
 nil = None

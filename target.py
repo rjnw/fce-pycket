@@ -37,7 +37,7 @@ def entry_point(argv):
     fp = os.open(filename, os.O_RDONLY, 0777)
     src = os.read(fp, 4096)
     os.close(fp)
-    tramp = trampoline(convert_to_ast(src), initial_environment(), halt_k())
+    tramp = (convert_to_ast(src), initial_environment(), halt_k())
     try:
         eval(tramp)
     except Done, e:
