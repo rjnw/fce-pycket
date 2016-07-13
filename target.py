@@ -41,7 +41,6 @@ def entry_point(argv):
     try:
         eval(tramp)
     except Done, e:
-        print str(e.value.number_value)
         return 0
 
 def target(*args):

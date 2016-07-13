@@ -9,16 +9,19 @@ import time
 
 class Value(object):
     _attrs_ = []
-    _immutable_fields_ = ['exp', 'env', 'k', 'number_value', 'var', 'env_var_map']
-
     def evaluate(self, exp, env, k):
         raise NotImplementedError("Abstract base class")
 
 class Cont(Value):
+    _attrs_ = ['exp', 'env', 'k']
+    _immutable_fields_ = ['exp', 'env', 'k']
+
     def plug_reduce(self, v):
         raise NotImplementedError("Abstract base class")
 
 class Number(Value):
+    _attrs = []
+    _immutable_fields_ = ['number_value']
     def __init__(self, num):
         self.number_value = num
     def tostring(self):
@@ -49,7 +52,6 @@ class Environment(Value):
         self.var_map = var_map
         self.prev = prev
 
-    @jit.elidable
     def lookup(self, key):
         return env_lookup(self.var_map, self.val_arr, key, self.prev)
 
@@ -104,6 +106,8 @@ class WithEnv(Value):
         return (evn_exp, env, withenv_k(eval_exp, env, k))
 
 class let_k(Cont):
+    _attrs_ = ['body', 'var', 'env', 'k', 'env_var_map']
+    _immutable_fields_ = ['body', 'var', 'env', 'k', 'env_var_map']
     def __init__(self, var, body, env, k):
         self.var = var
         self.body = body
@@ -154,6 +158,8 @@ class closure_k(Cont):
                 self.k)
 
 class Closure(Value):
+    _attrs_ = ['body', 'var', 'env_var_map', 'env']
+    _immutable_fields_ = ['body', 'var', 'env_var_map', 'env']
     def __init__(self, body, var, env, fix=None):
         self.body = body
         self.var = var
@@ -180,14 +186,6 @@ class if_k(Cont):
             return (self.exp[2], self.env, self.k)
         else:
             return (self.exp[3], self.env, self.k)
-
-class Cell(Value):
-    def __init__(self, car, cdr):
-        self.car = car
-        self.cdr = cdr
-
-class Bool(Value):
-    pass
 
 class _prim_n(Cont):
     def __init__(self, exp, current_n, total_n, value_array,  func, env, k):
@@ -220,6 +218,8 @@ def prim_one_arg(func):
 
 def prim_two_arg(func):
     class prim_k1(Cont):
+        _attrs_ = ['exp', 'env', 'k']
+        _immutable_fields_ = ['exp', 'env', 'k']
         def __init__(self, exp2, env, k):
             self.exp = exp2
             self.env = env
@@ -228,6 +228,8 @@ def prim_two_arg(func):
             return (self.exp, self.env, prim_k2(v, self.env, self.k))
 
     class prim_k2(Cont):
+        _attrs_ = ['v1', 'env', 'k']
+        _immutable_fields_ = ['v1', 'env', 'k']
         def __init__(self, v1, env, k):
             self.v1 = v1
             self.env = env
@@ -240,6 +242,17 @@ def prim_two_arg(func):
             return (exp[1], env, prim_k1(exp[2], env, k))
     return prim_eval
 
+class Cell(Value):
+    _attrs_ = ['car', 'cdr']
+    _immutable_fields_ = ['car', 'cdr']
+    def __init__(self, car, cdr):
+        self.car = car
+        self.cdr = cdr
+
+class Bool(Value):
+    pass
+
+
 nil = None
 
 true = Bool()
@@ -251,26 +264,32 @@ def cons(car, cdr):
 
 @prim_one_arg
 def car(ls):
+    assert isinstance(ls, Cell)
     return ls.car
 
 @prim_one_arg
 def cdr(ls):
+    assert isinstance(ls, Cell)
     return ls.cdr
 
 @prim_two_arg
 def add(e1, e2):
+    assert isinstance(e1, Number) and isinstance(e2, Number)
     return Number(e1.number_value + e2.number_value)
 
 @prim_two_arg
 def sub(e1, e2):
+    assert isinstance(e1, Number) and isinstance(e2, Number)
     return Number(e1.number_value - e2.number_value)
 
 @prim_two_arg
 def mult(e1, e2):
+    assert isinstance(e1, Number) and isinstance(e2, Number)
     return Number(e1.number_value * e2.number_value)
 
 @prim_one_arg
 def zero_huh(v):
+    assert isinstance(v, Number)
     if v.number_value == 0:
         return true
     else:
@@ -300,6 +319,7 @@ class Time(Value):
 
 @prim_one_arg
 def display(v):
+    assert isinstance(v, Number)
     stdout.write(str(v.number_value)+'\n')
     stdout.flush()
     return v
