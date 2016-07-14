@@ -344,7 +344,7 @@ class Done(Exception):
 
 @jit.elidable_promote('all')
 def get_topenv_index(var_map, key):
-    return var_map[key]
+    return var_map.get(key, -1)
 
 class TopLevelEnvironment(Value):
     _immutable_fields_ = ['val_arr[*]', 'var_map']
@@ -354,18 +354,20 @@ class TopLevelEnvironment(Value):
             self.var_map[v] = i
         self.val_arr = values
 
+    @jit.elidable
     def lookup(self, key):
-        return self.val_arr[get_topenv_index(self.var_map, key)]
+        index = get_topenv_index(self.var_map, key)
+        if index == -1:
+            raise Exception('variable not found')
+        else:
+            return self.val_arr[index]
 
 
-#TODO fix prev of top level to raise exception if not found
-def initial_environment():
-    names = ['lambda', 'let', 'if', 'true', 'false',
+PRIM_NAMES = ['lambda', 'let', 'if', 'true', 'false',
                    'zero?', '+', '-', 'cons', 'car', 'cdr', '*', 'call/cc',
                    'fix', 'read', 'display', 'time']
-    values = [Lambda(), Let(), If(), true, false, zero_huh(), add(),
+PRIM_VALUES = [Lambda(), Let(), If(), true, false, zero_huh(), add(),
                        sub(), cons(), car(), cdr(), mult(), Callcc(),
                        Fix(), Read(), display(), Time()]
 
-    env = TopLevelEnvironment(names, values)
-    return env
+INIT_ENV = TopLevelEnvironment(PRIM_NAMES, PRIM_VALUES)
