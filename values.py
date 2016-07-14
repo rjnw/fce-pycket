@@ -365,7 +365,7 @@ class TopLevelEnvironment(Value):
 
 PRIM_NAMES = ['lambda', 'let', 'if', 'true', 'false',
                    'zero?', '+', '-', 'cons', 'car', 'cdr', '*', 'call/cc',
-                   'fix', 'read', 'display', 'time']
+                   'letrec', 'read', 'display', 'time']
 PRIM_VALUES = [Lambda(), Let(), If(), true, false, zero_huh(), add(),
                        sub(), cons(), car(), cdr(), mult(), Callcc(),
                        Fix(), Read(), display(), Time()]
