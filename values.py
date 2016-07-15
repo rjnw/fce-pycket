@@ -37,13 +37,17 @@ def get_env_index(var_map, var):
             return i
     return -1
 
-@jit.elidable
+@jit.unroll_safe
 def env_lookup(var_map, val_arr, key, prev):
-    index = get_env_index(var_map, key)
-    if index == -1:
-        return prev.lookup(key)
-    else:
-        return val_arr[index]
+    while not isinstance(prev, TopLevelEnvironment):
+        index = get_env_index(var_map, key)
+        if index == -1:
+            var_map = prev.var_map
+            val_arr = prev.var_arr
+            prev = prev.prev
+        else:
+            return val_arr[index]
+    return prev.lookup(key)
 
 class Environment(Value):
     _immutable_fields_ = ['val_arr[*]', 'var_map[*]', 'prev']
