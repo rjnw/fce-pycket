@@ -358,7 +358,7 @@ class TopLevelEnvironment(Value):
     def lookup(self, key):
         index = get_topenv_index(self.var_map, key)
         if index == -1:
-            raise Exception('variable not found')
+            raise Exception('variable not found '+key)
         else:
             return self.val_arr[index]
 

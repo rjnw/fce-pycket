@@ -1,6 +1,7 @@
 import string
-from ast import NumberAST, SexpAST, SymbolAST, PrimSexpAST
+from ast import NumberAST, SexpAST, SymbolAST, PrimSexpAST, make_symbol_ast
 from values import PRIM_NAMES
+
 def parse_exp(st, curr_ind, captured_env=False):
     while st[curr_ind] in string.whitespace:
         curr_ind += 1
@@ -26,7 +27,7 @@ def parse_exp(st, curr_ind, captured_env=False):
         if ast_st.isdigit():
             ast = NumberAST(int(ast_st))
         else:
-            ast = SymbolAST(ast_st)
+            ast = make_symbol_ast(ast_st)#SymbolAST(ast_st)
     return ast, curr_ind
 
 def convert_to_ast(st):

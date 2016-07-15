@@ -1,4 +1,3 @@
-#lang racket
 (display
  (let ((y 20))
    (letrec ((fact (lambda (x) (if (zero? x) 1 (* x (fact (- x 1)))))))

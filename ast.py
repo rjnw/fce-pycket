@@ -17,6 +17,15 @@ class SymbolAST(AST):
     def eval(self, env, k):
         return k.plug_reduce(env.lookup(self.string_value))
 
+INTERNED_SYMBOLS = {}
+def make_symbol_ast(symbol):
+    if symbol in INTERNED_SYMBOLS:
+        return INTERNED_SYMBOLS[symbol]
+    else:
+        sa = SymbolAST(symbol)
+        INTERNED_SYMBOLS[symbol] = sa
+        return sa
+
 class NumberAST(AST):
     _attrs_ = ['number_value', 'should_enter']
     _immutable_fields_ = ['number_value', 'should_enter']
