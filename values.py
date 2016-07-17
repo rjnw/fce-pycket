@@ -30,7 +30,7 @@ class Number(Value):
 def make_env_map(vars):
     return vars
 
-@jit.elidable_promote('all')
+@jit.unroll_safe
 def get_env_index(var_map, var):
     for i, v in enumerate(var_map):
         if v == var:
