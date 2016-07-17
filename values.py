@@ -64,6 +64,7 @@ class let_k(Cont):
         self.k = k
         self.env_var_map = make_env_map([self.var.string_value])
     def plug_reduce(self, v):
+        jit.promote(self.env_var_map)
         new_env = Environment(self.env_var_map, [v], self.env)
         return (self.body, new_env, self.k)
 
@@ -102,6 +103,7 @@ class closure_k(Cont):
         self.clos = clos
         self.k = k
     def plug_reduce(self, v):
+        jit.promote(self.clos.env_var_map)
         return (self.clos.body,
                 Environment(self.clos.env_var_map, [v], self.clos.env),
                 self.k)
@@ -117,6 +119,7 @@ class Closure(Value):
             self.env = env
         else:
             self.env = env.extend(fix, self)
+
     def evaluate(self, exp, env, k):
         rand = exp[1]
         return (rand, env, closure_k(self, env, k))
@@ -286,26 +289,6 @@ class halt_k(Cont):
 class Done(Exception):
     def __init__(self, val):
         self.value = val
-
-# @jit.elidable_promote('all')
-# def get_topenv_index(var_map, key):
-#     return var_map.get(key, -1)
-
-# class TopLevelEnvironment(Value):
-#     _immutable_fields_ = ['val_arr[*]', 'var_map']
-#     def __init__(self, names, values):
-#         self.var_map = {}
-#         for i, v in enumerate(names):
-#             self.var_map[v] = i
-#         self.val_arr = values
-
-#     @jit.elidable
-#     def lookup(self, key):
-#         index = get_topenv_index(self.var_map, key)
-#         if index == -1:
-#             raise Exception('variable not found '+key)
-#         else:
-#             return self.val_arr[index]
 
 
 def get_symbol_ast(symbol):

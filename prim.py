@@ -15,31 +15,35 @@ class Cont(Value):
 class Number(Value):
     _attrs = []
     _immutable_fields_ = ['number_value']
+
     def __init__(self, num):
         self.number_value = num
+
     def tostring(self):
         return str(self.number_value)
 
 def make_env_map(vars):
     return vars
 
-@jit.unroll_safe
-def get_env_index(var_map, var):
-    for i, v in enumerate(var_map):
-        if v == var:
-            return i
-    return -1
+class Environment1(Value):
+    _immutable_ = True
+    _immutable_fields_ = ['val', 'key', 'prev']
+    def __init__(self, var, val, prev):
 
-@jit.unroll_safe
-def env_lookup(env, key):
-    while env is not None:
-        index = get_env_index(env.var_map, key)
-        if index == -1:
-            env = env.prev
+        self.key = var
+        self.val = val
+        self.prev = prev
+
+    def lookup(self, key):
+        if key == self.key:
+            return self.val
         else:
-            return env.val_arr[index]
-    raise Exception('Unbound variable ')#get symbol from interned
-        
+            return self.prev.lookup(key)
+
+    def extend(self, key, value):
+        ne = Environment1(key, val, self)
+        return ne
+
 class Environment(Value):
     _immutable_ = True
     _attrs_ = ['val_arr', 'var_map', 'prev']
@@ -49,13 +53,43 @@ class Environment(Value):
         self.var_map = var_map
         self.prev = prev
 
+    def get_index(self, var):
+        for i, v in enumerate(self.var_map):
+            if v == var:
+                return i
+        return -1
+
+    @jit.unroll_safe
     def lookup(self, key):
-        return env_lookup(self, key)
+        for i, v in enumerate(self.var_map):
+            if v == key:
+                return self.val_arr[i]
+        return self.prev.lookup(key)
 
     def extend(self, key, value):
         evm = make_env_map([key])
         ne = Environment(evm, [value], self)
         return ne
+
+@jit.elidable
+def get_topenv_index(var_map, key):
+    return var_map.get(key, -1)
+
+class TopLevelEnvironment(Value):
+    _immutable_fields_ = ['val_arr[*]', 'var_map']
+    def __init__(self, names, values):
+        self.var_map = {}
+        for i, v in enumerate(names):
+            self.var_map[v] = i
+        self.val_arr = values
+
+    @jit.elidable
+    def lookup(self, key):
+        index = get_topenv_index(self.var_map, key)
+        if index == -1:
+            raise Exception('variable not found ')
+        else:
+            return self.val_arr[index]
 
 class app_k(Cont):
     def __init__(self, exp, env, k):
