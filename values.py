@@ -38,20 +38,15 @@ def get_env_index(var_map, var):
     return -1
 
 @jit.unroll_safe
-def env_lookup(var_map, val_arr, key, prev):
-    while True:
-        index = get_env_index(var_map, key)
+def env_lookup(env, key):
+    while env is not None:
+        index = get_env_index(env.var_map, key)
         if index == -1:
-            if isinstance(prev, TopLevelEnvironment):
-                return prev.lookup(key)
-            else:
-                assert isinstance(prev, Environment)
-                var_map = prev.var_map
-                val_arr = prev.val_arr
-                prev = prev.prev
+            env = env.prev
         else:
-            return val_arr[index]
-
+            return env.val_arr[index]
+    raise Exception('Unbound variable '+key)
+        
 class Environment(Value):
     _immutable_fields_ = ['val_arr[*]', 'var_map[*]', 'prev']
     def __init__(self, var_map, values, prev=None):
@@ -60,7 +55,7 @@ class Environment(Value):
         self.prev = prev
 
     def lookup(self, key):
-        return env_lookup(self.var_map, self.val_arr, key, self.prev)
+        return env_lookup(self, key)
 
     def extend(self, key, value):
         evm = make_env_map([key])
@@ -377,4 +372,4 @@ PRIM_VALUES = [Lambda(), Let(), If(), true, false, zero_huh(), add(),
                        sub(), cons(), car(), cdr(), mult(), Callcc(),
                        Fix(), Read(), display(), Time()]
 
-INIT_ENV = TopLevelEnvironment(PRIM_NAMES, PRIM_VALUES)
+INIT_ENV = Environment(PRIM_NAMES, PRIM_VALUES, None)
