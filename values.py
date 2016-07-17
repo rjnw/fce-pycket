@@ -87,7 +87,7 @@ class fix_k(Cont):
         if self.env == v.env:
             return (self.body, new_v.env, self.k)
         else:
-            new_env = self.env.extend(self.var.string_value, new_v)
+            new_env = Environment([self.var.string_value], [new_v], self.env)
             return (self.body, new_env, self.k)
 
 class Fix(Value):
@@ -118,7 +118,7 @@ class Closure(Value):
         if fix == 0:
             self.env = env
         else:
-            self.env = env.extend(fix, self)
+            self.env = Environment([fix], [self], env)
 
     def evaluate(self, exp, env, k):
         rand = exp[1]

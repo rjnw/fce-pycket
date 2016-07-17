@@ -66,11 +66,6 @@ class Environment(Value):
                 return self.val_arr[i]
         return self.prev.lookup(key)
 
-    def extend(self, key, value):
-        evm = make_env_map([key])
-        ne = Environment(evm, [value], self)
-        return ne
-
 @jit.elidable
 def get_topenv_index(var_map, key):
     return var_map.get(key, -1)
