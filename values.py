@@ -48,6 +48,7 @@ def env_lookup(env, key):
     raise Exception('Unbound variable '+key)
         
 class Environment(Value):
+    _attrs_ = ['val_arr', 'var_map', 'prev']
     _immutable_fields_ = ['val_arr[*]', 'var_map[*]', 'prev']
     def __init__(self, var_map, values, prev=None):
         self.val_arr = values
@@ -261,6 +262,10 @@ true = Bool()
 false = Bool()
 
 @prim_two_arg
+def begin2(v1, v2):
+    return v2
+
+@prim_two_arg
 def cons(car, cdr):
     return Cell(car, cdr)
 
@@ -367,9 +372,9 @@ class TopLevelEnvironment(Value):
 
 PRIM_NAMES = ['lambda', 'let', 'if', 'true', 'false',
                    'zero?', '+', '-', 'cons', 'car', 'cdr', '*', 'call/cc',
-                   'letrec', 'read', 'display', 'time']
+                   'letrec', 'read', 'display', 'time', 'begin2']
 PRIM_VALUES = [Lambda(), Let(), If(), true, false, zero_huh(), add(),
                        sub(), cons(), car(), cdr(), mult(), Callcc(),
-                       Fix(), Read(), display(), Time()]
+                       Fix(), Read(), display(), Time(), begin2()]
 
 INIT_ENV = Environment(PRIM_NAMES, PRIM_VALUES, None)
