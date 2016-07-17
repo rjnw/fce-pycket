@@ -1,67 +1,13 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-from ast import *
+
+from prim import *
 from rpython.rlib import streamio, jit
 from rpython.rlib.objectmodel import specialize
 import time
+from ast import global_symbol_table, get_string_value
 
-
-class Value(object):
-    _attrs_ = []
-    def evaluate(self, exp, env, k):
-        raise NotImplementedError("Abstract base class")
-
-class Cont(Value):
-    _attrs_ = ['exp', 'env', 'k']
-    _immutable_fields_ = ['exp', 'env', 'k']
-
-    def plug_reduce(self, v):
-        raise NotImplementedError("Abstract base class")
-
-class Number(Value):
-    _attrs = []
-    _immutable_fields_ = ['number_value']
-    def __init__(self, num):
-        self.number_value = num
-    def tostring(self):
-        return str(self.number_value)
-
-def make_env_map(vars):
-    return vars
-
-@jit.unroll_safe
-def get_env_index(var_map, var):
-    for i, v in enumerate(var_map):
-        if v == var:
-            return i
-    return -1
-
-@jit.unroll_safe
-def env_lookup(env, key):
-    while env is not None:
-        index = get_env_index(env.var_map, key)
-        if index == -1:
-            env = env.prev
-        else:
-            return env.val_arr[index]
-    raise Exception('Unbound variable '+key)
-        
-class Environment(Value):
-    _attrs_ = ['val_arr', 'var_map', 'prev']
-    _immutable_fields_ = ['val_arr[*]', 'var_map[*]', 'prev']
-    def __init__(self, var_map, values, prev=None):
-        self.val_arr = values
-        self.var_map = var_map
-        self.prev = prev
-
-    def lookup(self, key):
-        return env_lookup(self, key)
-
-    def extend(self, key, value):
-        evm = make_env_map([key])
-        ne = Environment(evm, [value], self)
-        return ne
 
 class Lambda(Value):
     def evaluate(self, exp, env, k):
@@ -163,11 +109,11 @@ class closure_k(Cont):
 class Closure(Value):
     _attrs_ = ['body', 'var', 'env_var_map', 'env']
     _immutable_fields_ = ['body', 'var', 'env_var_map', 'env']
-    def __init__(self, body, var, env, fix=None):
+    def __init__(self, body, var, env, fix=0):
         self.body = body
         self.var = var
         self.env_var_map = make_env_map([self.var.string_value])
-        if fix is None:
+        if fix == 0:
             self.env = env
         else:
             self.env = env.extend(fix, self)
@@ -331,14 +277,6 @@ def display(v):
     stdout.flush()
     return v
 
-class app_k(Cont):
-    def __init__(self, exp, env, k):
-        self.exp = exp
-        self.env = env
-        self.k = k
-    def plug_reduce(self, v):
-        return v.evaluate(self.exp, self.env, self.k)
-
 class halt_k(Cont):
     def __init__(self):
         pass
@@ -349,32 +287,36 @@ class Done(Exception):
     def __init__(self, val):
         self.value = val
 
-@jit.elidable_promote('all')
-def get_topenv_index(var_map, key):
-    return var_map.get(key, -1)
+# @jit.elidable_promote('all')
+# def get_topenv_index(var_map, key):
+#     return var_map.get(key, -1)
 
-class TopLevelEnvironment(Value):
-    _immutable_fields_ = ['val_arr[*]', 'var_map']
-    def __init__(self, names, values):
-        self.var_map = {}
-        for i, v in enumerate(names):
-            self.var_map[v] = i
-        self.val_arr = values
+# class TopLevelEnvironment(Value):
+#     _immutable_fields_ = ['val_arr[*]', 'var_map']
+#     def __init__(self, names, values):
+#         self.var_map = {}
+#         for i, v in enumerate(names):
+#             self.var_map[v] = i
+#         self.val_arr = values
 
-    @jit.elidable
-    def lookup(self, key):
-        index = get_topenv_index(self.var_map, key)
-        if index == -1:
-            raise Exception('variable not found '+key)
-        else:
-            return self.val_arr[index]
+#     @jit.elidable
+#     def lookup(self, key):
+#         index = get_topenv_index(self.var_map, key)
+#         if index == -1:
+#             raise Exception('variable not found '+key)
+#         else:
+#             return self.val_arr[index]
 
 
-PRIM_NAMES = ['lambda', 'let', 'if', 'true', 'false',
-                   'zero?', '+', '-', 'cons', 'car', 'cdr', '*', 'call/cc',
-                   'letrec', 'read', 'display', 'time', 'begin2']
+def get_symbol_ast(symbol):
+    return global_symbol_table.make_symbol_ast(symbol)
+
+PRIM_NAMES = map(get_string_value,
+                 map(get_symbol_ast,
+                 ['lambda', 'let', 'if', 'true', 'false',
+                  'zero?', '+', '-', 'cons', 'car', 'cdr', '*', 'call/cc',
+                  'letrec', 'read', 'display', 'time', 'begin2']))
 PRIM_VALUES = [Lambda(), Let(), If(), true, false, zero_huh(), add(),
                        sub(), cons(), car(), cdr(), mult(), Callcc(),
                        Fix(), Read(), display(), Time(), begin2()]
 
-INIT_ENV = Environment(PRIM_NAMES, PRIM_VALUES, None)

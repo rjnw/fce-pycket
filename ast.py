@@ -1,4 +1,4 @@
-from values import Number, app_k, INIT_ENV
+from prim import Number, app_k, Environment
 
 class AST(object):
     _attrs_ = ['should_enter', 'string_value']
@@ -13,18 +13,30 @@ class SymbolAST(AST):
         self.string_value = symbol_str
         self.should_enter = False
     def tostring(self):
-        return self.string_value
+        return global_symbol_table.num_to_symbol[self.string_value]
     def eval(self, env, k):
         return k.plug_reduce(env.lookup(self.string_value))
 
-INTERNED_SYMBOLS = {}
-def make_symbol_ast(symbol):
-    if symbol in INTERNED_SYMBOLS:
-        return INTERNED_SYMBOLS[symbol]
-    else:
-        sa = SymbolAST(symbol)
-        INTERNED_SYMBOLS[symbol] = sa
-        return sa
+class SymbolTable(object):
+    def __init__(self):
+        self.symbol_to_ast = {}
+        self.num_to_symbol = {}
+        self.count = 1
+
+    def make_symbol_ast(self, symbol):
+        if symbol in self.symbol_to_ast:
+            return self.symbol_to_ast[symbol]
+        else:
+            ast = SymbolAST(self.count)
+            self.symbol_to_ast[symbol] = ast
+            self.num_to_symbol[self.count] = symbol
+            self.count += 1
+            return ast
+
+global_symbol_table = SymbolTable()
+
+def get_string_value(s_ast):
+    return s_ast.string_value
 
 class NumberAST(AST):
     _attrs_ = ['number_value', 'should_enter']
@@ -72,10 +84,10 @@ class SexpAST(AST):
 class PrimSexpAST(AST):
     _attrs_ = ['children', 'should_enter', '_evaluator']
     _immutable_fields_ = ['children[*]', '_evaluator', 'should_enter']
-    def __init__(self, children):
+    def __init__(self, children, init_env):
         self.children = children
         self.should_enter = False
-        self._evaluator = INIT_ENV.lookup(self.children[0].string_value)
+        self._evaluator = init_env.lookup(self.children[0].string_value)
 
     def __getitem__(self, key):
         return self.children[key]
@@ -85,3 +97,4 @@ class PrimSexpAST(AST):
 
     def eval(self, env, k):
         return self._evaluator.evaluate(self.children, env, k)
+
