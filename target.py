@@ -16,7 +16,7 @@ jitdriver = JitDriver(greens=['exp'],
                       reds=['env', 'k'],
                       get_printable_location=get_printable_location)
 
-INIT_ENV = TopLevelEnvironment(PRIM_NAMES, PRIM_VALUES)
+INIT_ENV = create_top_level_env(PRIM_NAMES, PRIM_VALUES)
 
 def eval(t):
     exp, env, k = t

@@ -55,17 +55,17 @@ class WithEnv(Value):
         return (evn_exp, env, withenv_k(eval_exp, env, k))
 
 class let_k(Cont):
-    _attrs_ = ['body', 'var', 'env', 'k', 'env_var_map']
-    _immutable_fields_ = ['body', 'var', 'env', 'k', 'env_var_map']
+    _attrs_ = ['body', 'var', 'env', 'k', 'env_struct']
+    _immutable_fields_ = ['body', 'var', 'env', 'k', 'env_struct']
     def __init__(self, var, body, env, k):
         self.var = var
         self.body = body
         self.env = env
         self.k = k
-        self.env_var_map = make_env_map([self.var.string_value])
+        self.env_struct = EnvironmentStructure([self.var.string_value], self.env[0])
     def plug_reduce(self, v):
-        jit.promote(self.env_var_map)
-        new_env = Environment(self.env_var_map, [v], self.env)
+        jit.promote(self.env_struct)
+        new_env = (self.env_struct, EnvironmentValues([v], self.env[1]))
         return (self.body, new_env, self.k)
 
 class Let(Value):
@@ -87,7 +87,7 @@ class fix_k(Cont):
         if self.env == v.env:
             return (self.body, new_v.env, self.k)
         else:
-            new_env = Environment([self.var.string_value], [new_v], self.env)
+            new_env = env_extend(self.env, [self.var.string_value], [new_v])
             return (self.body, new_env, self.k)
 
 class Fix(Value):
@@ -103,24 +103,25 @@ class closure_k(Cont):
         self.clos = clos
         self.k = k
     def plug_reduce(self, v):
-        jit.promote(self.clos.env_var_map)
+        jit.promote(self.clos.env_struct)
         return (self.clos.body,
-                Environment(self.clos.env_var_map, [v], self.clos.env),
+                (self.clos.env_struct, EnvironmentValues([v], self.clos.env[1])),
                 self.k)
 
 class Closure(Value):
-    _attrs_ = ['body', 'var', 'env_var_map', 'env']
-    _immutable_fields_ = ['body', 'var', 'env_var_map', 'env']
+    _attrs_ = ['body', 'var', 'env_struct', 'env']
+    _immutable_fields_ = ['body', 'var', 'env_struct', 'env']
     def __init__(self, body, var, env, fix=0):
         self.body = body
         self.var = var
-        self.env_var_map = make_env_map([self.var.string_value])
         if fix == 0:
             self.env = env
         else:
-            self.env = Environment([fix], [self], env)
+            self.env = env_extend(env, [fix], [self])
+        self.env_struct = EnvironmentStructure([self.var.string_value], self.env[0])
 
     def evaluate(self, exp, env, k):
+        
         rand = exp[1]
         return (rand, env, closure_k(self, env, k))
 

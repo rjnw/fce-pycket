@@ -1,4 +1,4 @@
-from prim import Number, app_k, Environment
+from prim import Number, app_k, env_lookup
 
 class AST(object):
     _attrs_ = ['should_enter', 'string_value']
@@ -15,7 +15,7 @@ class SymbolAST(AST):
     def tostring(self):
         return global_symbol_table.num_to_symbol[self.string_value]
     def eval(self, env, k):
-        return k.plug_reduce(env.lookup(self.string_value))
+        return k.plug_reduce(env_lookup(env, self.string_value))
 
 class SymbolTable(object):
     def __init__(self):
@@ -50,7 +50,7 @@ class NumberAST(AST):
         return k.plug_reduce(self.number_value)
 
 def simple_sexp_eval(self, env, k):
-    ev = env.lookup(self.children[0].string_value)
+    ev = env_lookup(env, self.children[0].string_value)
     return ev.evaluate(self.children, env, k)
 
 def complex_sexp_eval(self, env, k):
@@ -87,7 +87,7 @@ class PrimSexpAST(AST):
     def __init__(self, children, init_env):
         self.children = children
         self.should_enter = False
-        self._evaluator = init_env.lookup(self.children[0].string_value)
+        self._evaluator = env_lookup(init_env, self.children[0].string_value)
 
     def __getitem__(self, key):
         return self.children[key]
