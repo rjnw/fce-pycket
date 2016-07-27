@@ -24,14 +24,20 @@ class Closure(Value):
     _attrs_ = ['body', 'args', 'env_struct', 'env']
     _immutable_fields_ = ['body', 'args', 'env_struct', 'env']
     def __init__(self, body, args, env, fix=0):
+        #assert isinstance(args, SexpAST)
         self.body = body
         self.args = args
         if fix == 0:
             self.env = env
         else:
             self.env = env_extend(env, [fix], [self])
-        self.env_struct = EnvironmentStructure([var.string_value for var in self.args.children],
-                                               self.env[0])
+        if isinstance(args, SexpAST):
+            self.env_struct = EnvironmentStructure([var.string_value for var in self.args.children],
+                                                   self.env[0])
+        else:
+            raise NotImplemented('list argument not implemented')
+        # self.env_struct = EnvironmentStructure([var.string_value for var in self.args.children],
+        #                                      self.env[0])
 
     def evaluate(self, exp, env, k):
         arg_len = len(exp) - 1
