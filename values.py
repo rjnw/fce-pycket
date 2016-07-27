@@ -3,18 +3,52 @@
 #
 
 from prim import *
+from ast import *
 from rpython.rlib import streamio, jit
 from rpython.rlib.objectmodel import specialize
 import time
 from ast import global_symbol_table, get_string_value
 
+@jit.elidable
+def simple_interpret(exp, env):
+    return env_lookup(env, exp.string_value)
 
 class Lambda(Value):
     def evaluate(self, exp, env, k):
-        arg = exp[1][0]
+        args = exp[1]
         body = exp[2]
         body.should_enter = True
-        return k.plug_reduce(Closure(body, arg, env))
+        return k.plug_reduce(Closure(body, args, env))
+
+class Closure(Value):
+    _attrs_ = ['body', 'args', 'env_struct', 'env']
+    _immutable_fields_ = ['body', 'args', 'env_struct', 'env']
+    def __init__(self, body, args, env, fix=0):
+        self.body = body
+        self.args = args
+        if fix == 0:
+            self.env = env
+        else:
+            self.env = env_extend(env, [fix], [self])
+        self.env_struct = EnvironmentStructure([var.string_value for var in self.args.children],
+                                               self.env[0])
+
+    def evaluate(self, exp, env, k):
+        arg_len = len(exp) - 1
+        vals = [None]* arg_len
+        return (exp[1], env, _prim_n(exp, 2, vals, 0, arg_len-1, env, closure_k(self, env, k)))
+
+class closure_k(Cont):
+    def __init__(self, clos, env, k):
+        assert isinstance(clos, Closure)
+        self.clos = clos
+        self.k = k
+    def plug_reduce(self, v):
+        jit.promote(self.clos.env_struct)
+        assert isinstance(v, MultiValue)
+        return (self.clos.body,
+                (self.clos.env_struct, EnvironmentValues(v.values, self.clos.env[1])),
+                self.k)
 
 class CapturedCont(Value):
     def __init__(self, k):
@@ -83,7 +117,7 @@ class fix_k(Cont):
         self.k = k
     def plug_reduce(self, v):
         assert isinstance(v, Closure)
-        new_v = Closure(v.body, v.var, v.env, self.var.string_value)
+        new_v = Closure(v.body, v.args, v.env, self.var.string_value)
         if self.env == v.env:
             return (self.body, new_v.env, self.k)
         else:
@@ -96,34 +130,6 @@ class Fix(Value):
         val_exp = exp[1][0][1]
         body_exp = exp[2]
         return (val_exp, env, fix_k(var, body_exp, env, k))
-
-class closure_k(Cont):
-    def __init__(self, clos, env, k):
-        assert isinstance(clos, Closure)
-        self.clos = clos
-        self.k = k
-    def plug_reduce(self, v):
-        jit.promote(self.clos.env_struct)
-        return (self.clos.body,
-                (self.clos.env_struct, EnvironmentValues([v], self.clos.env[1])),
-                self.k)
-
-class Closure(Value):
-    _attrs_ = ['body', 'var', 'env_struct', 'env']
-    _immutable_fields_ = ['body', 'var', 'env_struct', 'env']
-    def __init__(self, body, var, env, fix=0):
-        self.body = body
-        self.var = var
-        if fix == 0:
-            self.env = env
-        else:
-            self.env = env_extend(env, [fix], [self])
-        self.env_struct = EnvironmentStructure([self.var.string_value], self.env[0])
-
-    def evaluate(self, exp, env, k):
-        
-        rand = exp[1]
-        return (rand, env, closure_k(self, env, k))
 
 class If(Value):
     def evaluate(self, exp, env, k):
@@ -141,20 +147,27 @@ class if_k(Cont):
             return (self.exp[3], self.env, self.k)
 
 class _prim_n(Cont):
-    def __init__(self, exp, current_n, total_n, value_array,  func, env, k):
-        self.exp = exp
-        self.n = current_n
-        self.N = total_n
-        self.values = value_array
-        self.func = func
+    def __init__(self, exp_array, exp_offset,
+                       value_array, current_index, end_index,
+                       env, k):
+        self.exp_array = exp_array
+        self.exp_offset = exp_offset
+        self.value_array = value_array
+        self.current_index = current_index
+        self.end_index = end_index
         self.env = env
         self.k = k
+
     def plug_reduce(self, v):
-        if self.n == self.N:
-            value_array[self.n - 1] = v
-            self.k.plug_reduce(func(value_array))
+        self.value_array[self.current_index] = v
+        if self.current_index == self.end_index:
+            return self.k.plug_reduce(MultiValue(self.value_array))
         else:
-            exp[current_n+1], env, _prim_n(exp, current_n+1, total_n, value_array, func, env, k)
+            return (self.exp_array[self.current_index + self.exp_offset],
+                    self.env,
+                    _prim_n(self.exp_array, self.exp_offset,
+                            self.value_array, self.current_index+1, self.end_index,
+                            self.env, self.k))
 
 def prim_one_arg(func):
     class prim_k(Cont):

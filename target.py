@@ -9,22 +9,22 @@ import pdb
 
 from rpython.rlib.jit import JitDriver
 
-def get_printable_location(exp):
+def get_printable_location(exp, env_struct):
     return exp.tostring()
 
-jitdriver = JitDriver(greens=['exp'],
-                      reds=['env', 'k'],
+jitdriver = JitDriver(greens=['exp', 'env_struct'],
+                      reds=['env_values', 'k'],
                       get_printable_location=get_printable_location)
 
 INIT_ENV = create_top_level_env(PRIM_NAMES, PRIM_VALUES)
 
 def eval(t):
-    exp, env, k = t
+    exp, (env_struct, env_values), k = t
     while True:
-        jitdriver.jit_merge_point(exp=exp, env=env, k=k)
-        exp, env, k = exp.eval(env, k)
+        jitdriver.jit_merge_point(exp=exp, env_struct=env_struct, env_values=env_values, k=k)
+        exp, (env_struct, env_values), k = exp.eval((env_struct, env_values), k)
         if exp.should_enter == True:
-            jitdriver.can_enter_jit(exp=exp, env=env, k=k)
+            jitdriver.can_enter_jit(exp=exp, env_struct=env_struct, env_values=env_values, k=k)
 
 def jitpolicy(driver):
     from rpython.jit.codewriter.policy import JitPolicy

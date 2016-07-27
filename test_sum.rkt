@@ -1,5 +1,5 @@
 (time
- (let ((z 5000000))
+ (let ((z 500000))
    (letrec
     ((rec (lambda (z)
             (if (zero? z)

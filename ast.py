@@ -1,9 +1,9 @@
 from prim import Number, app_k, env_lookup
 
 class AST(object):
-    _attrs_ = ['should_enter', 'string_value']
+    _attrs_ = ['should_enter', 'string_value', 'children']
     #TODO string_value should not be here but rpython doesn't believe my isinstance checks
-    _immutable_fields_ = ['should_enter', 'string_value']
+    _immutable_fields_ = ['should_enter', 'string_value', 'children[*]']
     pass
 
 class SymbolAST(AST):

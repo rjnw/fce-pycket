@@ -35,6 +35,7 @@ def convert_to_ast(st, init_env):
     return t
 
 def get_ast(tokens, captured_env, init_env):
+    return SexpAST(list(tokens))
     if (not captured_env) and \
        isinstance(tokens[0], SymbolAST) and \
        tokens[0].string_value in PRIM_NAMES:

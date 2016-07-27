@@ -1,1 +1,2 @@
-((lambda (x) x) 42)
+(define (id x) x)
+(id 42)

@@ -22,6 +22,12 @@ class Number(Value):
     def tostring(self):
         return str(self.number_value)
 
+class MultiValue(Value):
+    _attrs_ = ['values']
+    _immutable_fields_ = ['values[*]']
+    def __init__(self, values):
+        self.values = values
+
 class EnvironmentStructure(object):
     _immutable_ = True
     _attrs_ = ['elems', 'prev']
