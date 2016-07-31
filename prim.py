@@ -1,4 +1,5 @@
 from rpython.rlib import jit
+from ast import *
 
 class Value(object):
     _attrs_ = []
@@ -43,7 +44,10 @@ class EnvironmentStructure(object):
             if v == var:
                 return i
         return -1
-    
+
+def extend_env_structure(vars, prev_struct):
+    return EnvironmentStructure(vars, prev_struct)
+
 class EnvironmentValues(Value):
     _immutable_ = True
     _attrs_ = ['values', 'prev']

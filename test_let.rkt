@@ -1,1 +1,1 @@
-(let (x 42) x)
+(display (let ((x 21) (y 21)) (+ x y)))
