@@ -43,18 +43,34 @@ class Closure(Value):
 def closure_exp_get(x):
     return x
 
+@jit.unroll_safe
+def find_env_in_chain_speculate(target_structure, target_env, env_structure, env):
+    jit.promote(target_structure)
+    jit.promote(env_structure)
+    while env_structure is not None:
+        if env_structure is target_structure:
+            if env is target_env:
+                return env
+        env = env.prev
+        env_structure = env_structure.prev
+    return target_env
+
 class closure_k(Cont):
     _attrs_ = ['clos', 'k']
     _immutable_fields_ = ['clos', 'k']
     def __init__(self, clos, env, k):
         assert isinstance(clos, Closure)
         self.clos = clos
+        self.env = env
         self.k = k
     def plug_reduce(self, v):
+        #find_env_in_chain_speculate as in pycket
+        prev_env_values = find_env_in_chain_speculate(self.clos.env_struct.prev, self.clos.env[1], self.env[0], self.env[1])
         jit.promote(self.clos.env_struct)
         assert isinstance(v, MultiValue)
         return (self.clos.body,
-                (self.clos.env_struct, EnvironmentValues(v.values, self.clos.env[1])),
+                (self.clos.env_struct, EnvironmentValues(v.values, prev_env_values)),
+                 #self.clos.env[1])),
                 self.k)
 
 class _prim_n(Cont):

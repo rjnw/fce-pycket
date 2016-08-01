@@ -27,7 +27,7 @@ def parse_exp(st, curr_ind, init_env, captured_env=False):
         if ast_st.isdigit():
             ast = NumberAST(int(ast_st))
         else:
-            ast = global_symbol_table.make_symbol_ast(ast_st)#SymbolAST(ast_st)
+            ast = global_symbol_table.make_symbol_ast(ast_st)
     return ast, curr_ind
 
 def convert_to_ast(st, init_env):
