@@ -81,6 +81,15 @@ class SexpAST(AST):
     def eval(self, env, k):
         return self._eval(self, env, k)
 
+class ModuleAST(AST):
+    _attrs_ = ['children', 'should_enter']
+    _immutable_fields_ = ['children', 'should_enter']
+    def __init__(self, children):
+        self.children = children
+        self.should_enter = False
+    def eval(self, env, k):
+        return self.chlidren[0], env, module_k(self.children, 1, len(self.children), env, k)
+
 class PrimSexpAST(AST):
     _attrs_ = ['children', 'should_enter', '_evaluator']
     _immutable_fields_ = ['children[*]', '_evaluator', 'should_enter']
@@ -97,4 +106,3 @@ class PrimSexpAST(AST):
 
     def eval(self, env, k):
         return self._evaluator.evaluate(self.children, env, k)
-
