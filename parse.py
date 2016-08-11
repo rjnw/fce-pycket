@@ -1,10 +1,14 @@
 import string
 from ast import NumberAST, SexpAST, SymbolAST, PrimSexpAST, global_symbol_table
-from values import PRIM_NAMES
+#from values import PRIM_NAMES
+
+def skip_whitespace(st, ind):
+    while  ind < len(st) and st[ind] in string.whitespace:
+        ind+=1
+    return ind
 
 def parse_exp(st, curr_ind, init_env, captured_env=False):
-    while st[curr_ind] in string.whitespace:
-        curr_ind += 1
+    curr_ind = skip_whitespace(st, curr_ind)
     if st[curr_ind] == '(':
         tokens = []
         while st[curr_ind] != ')':
@@ -16,9 +20,13 @@ def parse_exp(st, curr_ind, init_env, captured_env=False):
             tokens.append(t)
         curr_ind += 1
         ast = get_ast(tokens, captured_env, init_env)#SexpAST(list(tokens))
-    # elif st[curr_ind] == "'":
-    #     t,i = parse_exp(st, curr_ind+1)
-    #     return ('quote', t), i
+    elif st[curr_ind] == "'":
+        t, i = parse_exp(st, curr_ind+1, init_env, captured_env)
+        return SexpAST([global_symbol_table.make_symbol_ast('quote')] +[t]), i
+    elif st[curr_ind] == ';':
+        while st[curr_ind] != '\n':
+            curr_ind += 1
+        return parse_exp(st, curr_ind+1, init_env, captured_env)
     else:
         prev_ind = curr_ind
         while st[curr_ind] not in string.whitespace+')':
@@ -30,9 +38,18 @@ def parse_exp(st, curr_ind, init_env, captured_env=False):
             ast = global_symbol_table.make_symbol_ast(ast_st)
     return ast, curr_ind
 
-def convert_to_ast(st, init_env):
+def convert_to_ast(st, init_env=None):
     t, i = parse_exp(st, 0, init_env)
     return t
+
+def parse_module(st, init_env=None):
+    i = 0
+    asts = []
+    while i < len(st):
+        t, i = parse_exp(st, i, init_env)
+        i = skip_whitespace(st, i)
+        asts.append(t)
+    return asts
 
 def get_ast(tokens, captured_env, init_env):
     return SexpAST(list(tokens))

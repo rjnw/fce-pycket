@@ -23,8 +23,8 @@ def eval(t):
     while True:
         jitdriver.jit_merge_point(exp=exp, env_struct=env_struct, env_values=env_values, k=k)
         exp, (env_struct, env_values), k = exp.eval((env_struct, env_values), k)
-        if exp.should_enter == True:
-            jitdriver.can_enter_jit(exp=exp, env_struct=env_struct, env_values=env_values, k=k)
+        #if exp.should_enter == True:
+        jitdriver.can_enter_jit(exp=exp, env_struct=env_struct, env_values=env_values, k=k)
 
 def jitpolicy(driver):
     from rpython.jit.codewriter.policy import JitPolicy
@@ -40,7 +40,8 @@ def entry_point(argv):
     fp = os.open(filename, os.O_RDONLY, 0777)
     src = os.read(fp, 4096)
     os.close(fp)
-    tramp = (convert_to_ast(src, INIT_ENV), INIT_ENV, halt_k())
+    init_ast = convert_to_ast(src, INIT_ENV)
+    tramp = (init_ast, INIT_ENV, halt_k())
     try:
         eval(tramp)
     except Done, e:

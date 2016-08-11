@@ -12,6 +12,22 @@ from ast import global_symbol_table, get_string_value
 def simple_interpret(exp, env):
     return env_lookup(env, exp.string_value)
 
+class Define(Value):
+    def evaluate(self, exp, env, k):
+        body = exp[2]
+        arg = exp[1]
+        assert isinstance(arg, SymbolAST)
+        return (body, env, define_k(env, arg, k))
+
+class define_k(Cont):
+    def __init__(self, arg, env, k):
+        self.arg = arg
+        self.env = env
+        self.k = k
+    def plug_reduce(self, v):
+        e = env_extend(env, [self.arg.string_value], [v])
+        return k.plug_reduce(e)
+
 class Lambda(Value):
     def evaluate(self, exp, env, k):
         args = exp[1]
