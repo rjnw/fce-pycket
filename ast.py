@@ -14,8 +14,8 @@ class SymbolAST(AST):
         self.should_enter = False
     def tostring(self):
         return global_symbol_table.num_to_symbol[self.string_value]
-    def eval(self, env, k):
-        return k.plug_reduce(env_lookup(env, self.string_value))
+    def eval(self, env_s, env_v, k):
+        return k.plug_reduce(env_lookup(env_s, env_v, self.string_value))
 
 class SymbolTable(object):
     def __init__(self):
@@ -46,18 +46,18 @@ class NumberAST(AST):
         self.should_enter = False
     def tostring(self):
         return str(self.number_value.number_value)
-    def eval(self, env, k):
+    def eval(self, env_s, env_v, k):
         return k.plug_reduce(self.number_value)
 
-def simple_sexp_eval(self, env, k):
-    ev = env_lookup(env, self.children[0].string_value)
-    return ev.evaluate(self.children, env, k)
+def simple_sexp_eval(self, env_s, env_v, k):
+    ev = env_lookup(env_s, env_v, self.children[0].string_value)
+    return ev.evaluate(self.children, env_s, env_v, k)
 
-def complex_sexp_eval(self, env, k):
-    return self.children[0], env, app_k(self.children, env, k)
+def complex_sexp_eval(self, env_s, env_v, k):
+    return self.children[0], env_s, env_v, app_k(self.children, env_s, env_v, k)
 
-def prim_sexp_eval(self, env, k):
-    return self._evaluator.evaluate(self.children, env, k)
+def prim_sexp_eval(self, env_s, env_v, k):
+    return self._evaluator.evaluate(self.children, env_s, env_v, k)
 
 class SexpAST(AST):
     _attrs_ = ['children', '_eval', 'should_enter']
@@ -78,8 +78,8 @@ class SexpAST(AST):
     def tostring(self):
         return '(' + ' '.join([ast.tostring() for ast in self.children]) + ')'
 
-    def eval(self, env, k):
-        return self._eval(self, env, k)
+    def eval(self, env_s, env_v, k):
+        return self._eval(self, env_s, env_v, k)
 
 class ModuleAST(AST):
     _attrs_ = ['children', 'should_enter']
@@ -87,8 +87,9 @@ class ModuleAST(AST):
     def __init__(self, children):
         self.children = children
         self.should_enter = False
-    def eval(self, env, k):
-        return self.chlidren[0], env, module_k(self.children, 1, len(self.children), env, k)
+    def eval(self, env_s, env_v, k):
+        return self.chlidren[0], env_s, env_v, module_k(self.children,
+                                                        1, len(self.children), env_s, env_v, k)
 
 class PrimSexpAST(AST):
     _attrs_ = ['children', 'should_enter', '_evaluator']
@@ -96,7 +97,7 @@ class PrimSexpAST(AST):
     def __init__(self, children, init_env):
         self.children = children
         self.should_enter = False
-        self._evaluator = env_lookup(init_env, self.children[0].string_value)
+        self._evaluator = env_lookup(init_env[0], init_env[1], self.children[0].string_value)
 
     def __getitem__(self, key):
         return self.children[key]
@@ -104,5 +105,5 @@ class PrimSexpAST(AST):
     def tostring(self):
         return '(' + ' '.join([ast.tostring() for ast in self.children]) + ')'
 
-    def eval(self, env, k):
-        return self._evaluator.evaluate(self.children, env, k)
+    def eval(self, env_s, env_v, k):
+        return self._evaluator.evaluate(self.children, env_s, env_v, k)

@@ -19,12 +19,14 @@ jitdriver = JitDriver(greens=['exp', 'env_struct'],
 INIT_ENV = create_top_level_env(PRIM_NAMES, PRIM_VALUES)
 
 def eval(t):
-    exp, (env_struct, env_values), k = t
+    exp, env_s, env_v, k = t
     while True:
-        jitdriver.jit_merge_point(exp=exp, env_struct=env_struct, env_values=env_values, k=k)
-        exp, (env_struct, env_values), k = exp.eval((env_struct, env_values), k)
-        #if exp.should_enter == True:
-        jitdriver.can_enter_jit(exp=exp, env_struct=env_struct, env_values=env_values, k=k)
+        jitdriver.jit_merge_point(exp=exp, env_struct=env_s, env_values=env_v, k=k)
+
+        exp, env_s, env_v, k = exp.eval(env_s, env_v, k)
+
+        if exp.should_enter == True:
+            jitdriver.can_enter_jit(exp=exp, env_struct=env_s, env_values=env_v, k=k)
 
 def jitpolicy(driver):
     from rpython.jit.codewriter.policy import JitPolicy
@@ -41,7 +43,8 @@ def entry_point(argv):
     src = os.read(fp, 4096)
     os.close(fp)
     init_ast = convert_to_ast(src, INIT_ENV)
-    tramp = (init_ast, INIT_ENV, halt_k())
+    env_s, env_v = INIT_ENV
+    tramp = (init_ast, env_s, env_v, halt_k())
     try:
         eval(tramp)
     except Done, e:

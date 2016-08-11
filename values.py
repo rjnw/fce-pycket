@@ -9,98 +9,101 @@ from rpython.rlib.objectmodel import specialize
 import time
 from ast import global_symbol_table, get_string_value
 
-def simple_interpret(exp, env):
-    return env_lookup(env, exp.string_value)
+def simple_interpret(exp, env_s, env_v):
+    return env_lookup(env_s, env_v, exp.string_value)
 
 class Define(Value):
-    def evaluate(self, exp, env, k):
+    def evaluate(self, exp, env_s, env_v, k):
         body = exp[2]
         arg = exp[1]
         assert isinstance(arg, SymbolAST)
-        return (body, env, define_k(env, arg, k))
+        return (body, env_s, env_v, define_k(env_s, env_v, arg, k))
 
 class define_k(Cont):
-    def __init__(self, arg, env, k):
+    def __init__(self, arg, env_s, env_v, k):
         self.arg = arg
-        self.env = env
+        self.env_s = env_s
+        self.env_v = env_v
         self.k = k
     def plug_reduce(self, v):
-        e = env_extend(env, [self.arg.string_value], [v])
+        e = env_extend(self.env_s, self.env_v, [self.arg.string_value], [v])
         return k.plug_reduce(e)
 
 class Lambda(Value):
-    def evaluate(self, exp, env, k):
+    def evaluate(self, exp, env_s, env_v, k):
         args = exp[1]
         body = exp[2]
         body.should_enter = True
-        return k.plug_reduce(Closure(body, args, env))
+        return k.plug_reduce(Closure(body, args, env_s, env_v))
 
 class Closure(Value):
-    _attrs_ = ['body', 'args', 'env_struct', 'env']
-    _immutable_fields_ = ['body', 'args', 'env_struct', 'env']
-    def __init__(self, body, args, env, fix=0):
+    _attrs_ = ['body', 'args', 'env_s', 'env_v']
+    _immutable_fields_ = ['body', 'args', 'env_s', 'env_v']
+    def __init__(self, body, args, env_s, env_v, fix=None):
         self.body = body
         self.args = args
-        if fix == 0:
-            self.env = env
-        else:
-            self.env = env_extend(env, [fix], [self])
+        if fix is not None:
+            env_s, env_v = env_extend(env_s, env_v, [fix], [self])
+        self.env_s = env_s
+        self.env_v = env_v
         if isinstance(args, SexpAST):
-            self.env_struct = EnvironmentStructure([var.string_value for var in args.children],
-                                                   self.env[0])
+            self.new_env_s = EnvironmentStructure([var.string_value for var in args.children],
+                                                   self.env_s)
         else:
             raise Exception('list argument not implemented')
 
-    def evaluate(self, exp, env, k):
+    def evaluate(self, exp, env_s, env_v, k):
         arg_len = len(exp) - 1
         vals = [None]* arg_len
-        return (exp[1], env, _prim_n(exp, 2, closure_exp_get, vals, 0, arg_len-1, env, closure_k(self, env, k)))
+        return (exp[1], env_s, env_v, _prim_n(exp, 2, closure_exp_get, vals, 0, arg_len-1, env_s, env_v, closure_k(self, env_s, env_v, k)))
 
 def closure_exp_get(x):
     return x
 
 @jit.unroll_safe
-def find_env_in_chain_speculate(target_structure, target_env, env_structure, env):
-    jit.promote(target_structure)
+def find_env_in_chain_speculate(target_env_structure, target_env_values, env_structure, env_values):
+    jit.promote(target_env_structure)
     jit.promote(env_structure)
     while env_structure is not None:
-        if env_structure is target_structure:
-            if env is target_env:
-                return env
-        env = env.prev
+        if env_structure is target_env_structure:
+            if env_values is target_env_values:
+                return env_values
+        env_values = env_values.prev
         env_structure = env_structure.prev
-    return target_env
+    return target_env_values
 
 class closure_k(Cont):
-    _attrs_ = ['clos', 'k']
-    _immutable_fields_ = ['clos', 'k']
-    def __init__(self, clos, env, k):
+    _attrs_ = ['clos', 'k', 'env_s', 'env_v']
+    _immutable_fields_ = ['clos', 'k', 'env_s', 'env_v']
+    def __init__(self, clos, env_s, env_v, k):
         assert isinstance(clos, Closure)
         self.clos = clos
-        self.env = env
+        self.env_s = env_v
+        self.env_v = env_v
         self.k = k
     def plug_reduce(self, v):
-        #find_env_in_chain_speculate as in pycket
-        prev_env_values = find_env_in_chain_speculate(self.clos.env_struct.prev, self.clos.env[1], self.env[0], self.env[1])
-        jit.promote(self.clos.env_struct)
+        prev_env_v = find_env_in_chain_speculate(self.clos.new_env_s.prev,
+                                            self.clos.env_v, self.env_s, self.env_v)
+        jit.promote(self.clos.new_env_s)
         assert isinstance(v, MultiValue)
         return (self.clos.body,
-                (self.clos.env_struct, EnvironmentValues(v.values, prev_env_values)),
-                 #self.clos.env[1])),
+                self.clos.new_env_s,
+                EnvironmentValues(v.values, prev_env_v),
                 self.k)
 
 class _prim_n(Cont):
-    _immutable_fields_ = ['exp_array[*]', 'exp_offset', 'exp_getter', 'current_index', 'end_index', 'env' , 'k']
+    _immutable_fields_ = ['exp_array[*]', 'exp_offset', 'exp_getter', 'current_index', 'end_index', 'env_s', 'env_v', 'k']
     def __init__(self, exp_array, exp_offset, exp_getter,
                        value_array, current_index, end_index,
-                       env, k):
+                       env_s, env_v, k):
         self.exp_array = exp_array
         self.exp_offset = exp_offset
         self.exp_getter = exp_getter
         self.value_array = value_array
         self.current_index = current_index
         self.end_index = end_index
-        self.env = env
+        self.env_s = env_s
+        self.env_v = env_v
         self.k = k
 
     def plug_reduce(self, v):
@@ -109,169 +112,169 @@ class _prim_n(Cont):
             return self.k.plug_reduce(MultiValue(self.value_array))
         else:
             return (self.exp_getter(self.exp_array[self.current_index + self.exp_offset]),
-                    self.env,
+                    self.env_s, self.env_v,
                     _prim_n(self.exp_array, self.exp_offset, self.exp_getter,
                             self.value_array, self.current_index+1, self.end_index,
-                            self.env, self.k))
+                            self.env_s, self.env_v, self.k))
 
 class CapturedCont(Value):
     def __init__(self, k):
         self.k = k
-    def evaluate(self, exp, env, k):
-        return (exp[1], env, self.k)
+    def evaluate(self, exp, env_s, env_v, k):
+        return (exp[1], env_s, env_v, self.k)
 
 class callcc_k(Cont):
-    def __init__(self, env, k):
-        self.env = env
+    def __init__(self, env_s, env_v, k):
+        self.env_s = env_v
         self.k = k
 
     def plug_reduce(self, v):
-        ck = closure_k(v, self.env, self.k)
+        ck = closure_k(v, self.env_s, self.env_v, self.k)
         return ck.plug_reduce(CapturedCont(self.k))
 
 class Callcc(Value):
-    def evaluate(self, exp, env, k):
+    def evaluate(self, exp, env_s, env_v, k):
         arg = exp[1]
-        return (arg, env, callcc_k(env, k))
+        return (arg, env_s, env_v, callcc_k(env_s, env_v, k))
 
-class CaptEnv(Value):
-    def evaluate(self, exp, env, k):
-        return k.plug_reduce(env)
+# class CaptEnv(Value):
+#     def evaluate(self, exp, env_s, env_v, k):
+#         return k.plug_reduce(env)
 
-class withenv_k(Cont):
-    def __init__(self, eval_exp, env, k):
-        self.exp = exp
-        self.env = env
-        self.k = k
-    def plug_reduce(self, v):
-        return (self.exp, v, self.k)
+# class withenv_k(Cont):
+#     def __init__(self, eval_exp, env_s, env_v, k):
+#         self.exp = exp
+#         self.env = env
+#         self.k = k
+#     def plug_reduce(self, v):
+#         return (self.exp, v, self.k)
 
-class WithEnv(Value):
-    def evaluate(self, exp, env, k):
-        env_exp = exp[1]
-        eval_exp = exp[2]
-        return (evn_exp, env, withenv_k(eval_exp, env, k))
+# class WithEnv(Value):
+#     def evaluate(self, exp, env_s, env_v, k):
+#         env_exp = exp[1]
+#         eval_exp = exp[2]
+#         return (evn_exp, env_s, env_v, withenv_k(eval_exp, env_s, env_v, k))
 
 class let_k(Cont):
-    _attrs_ = ['body', 'var', 'env', 'k', 'env_struct']
-    _immutable_fields_ = ['body', 'var', 'env', 'k', 'env_struct']
-    def __init__(self, env_struct, body, env, k):
+    _attrs_ = ['body', 'var', 'env_s', 'env_v', 'k', 'env_struct']
+    _immutable_fields_ = ['body', 'var', 'env_s', 'env_v', 'k', 'env_struct']
+    def __init__(self, env_struct, body, env_s, env_v, k):
         self.env_struct = env_struct
         self.body = body
-        self.env = env
+        self.env_s = env_s
+        self.env_v = env_v
         self.k = k
     def plug_reduce(self, v):
         jit.promote(self.env_struct)
         assert isinstance(v, MultiValue)
-        new_env = (self.env_struct, EnvironmentValues(v.values, self.env[1]))
-        return (self.body, new_env, self.k)
+        return (self.body,
+                self.env_struct,
+                EnvironmentValues(v.values, self.env_v),
+                self.k)
 
 def let_exp_get(exp):
     return exp[1]
 
 class Let(Value):
-    def evaluate(self, exp, env, k):
+    def evaluate(self, exp, env_s, env_v, k):
         var_val_exp = exp[1]
         assert isinstance(var_val_exp, SexpAST)
         vars = [e[0].string_value for e in var_val_exp.children]
         vals = [None]*len(vars)
-        env_struct = EnvironmentStructure(vars, env[0])
+        env_struct = EnvironmentStructure(vars, env_s)
         body_exp = exp[2]
-        return (var_val_exp[0][1], env,
-                _prim_n(var_val_exp.children, 1, let_exp_get, vals, 0, len(vars)-1, env,
-                        let_k(env_struct, body_exp, env, k)))
+        return (var_val_exp[0][1], env_s, env_v,
+                _prim_n(var_val_exp.children, 1, let_exp_get, vals, 0, len(vars)-1, env_s, env_v,
+                        let_k(env_struct, body_exp, env_s, env_v, k)))
 
 class fix_k(Cont):
-    def __init__(self, var, body, env, k):
+    def __init__(self, var, body, env_s, env_v, k):
         self.var = var
         self.body = body
-        self.env = env
+        self.env_s = env_s
+        self.env_v = env_v
         self.k = k
     def plug_reduce(self, v):
         assert isinstance(v, Closure)
-        new_v = Closure(v.body, v.args, v.env, self.var.string_value)
-        if self.env == v.env:
-            return (self.body, new_v.env, self.k)
-        else:
-            new_env = env_extend(self.env, [self.var.string_value], [new_v])
-            return (self.body, new_env, self.k)
+        new_v = Closure(v.body, v.args, v.env_s, v.env_v, self.var.string_value)
+        return (self.body, new_v.env_s, new_v.env_v, self.k)
 
 class Fix(Value):
-    def evaluate(self, exp, env, k):
+    def evaluate(self, exp, env_s, env_v, k):
         var = exp[1][0][0]
         val_exp = exp[1][0][1]
         body_exp = exp[2]
-        return (val_exp, env, fix_k(var, body_exp, env, k))
+        return (val_exp, env_s, env_v, fix_k(var, body_exp, env_s, env_v, k))
 
 class If(Value):
-    def evaluate(self, exp, env, k):
-        return (exp[1], env, if_k(exp, env, k))
+    def evaluate(self, exp, env_s, env_v, k):
+        return (exp[1], env_s, env_v, if_k(exp, env_s, env_v, k))
 
 class if_k(Cont):
-    def __init__(self, exp, env, k):
+    def __init__(self, exp, env_s, env_v, k):
         self.exp = exp
-        self.env = env
+        self.env_s = env_s
+        self.env_v = env_v
         self.k = k
     def plug_reduce(self, v):
         if v == true:
-            return (self.exp[2], self.env, self.k)
+            return (self.exp[2], self.env_s, self.env_v, self.k)
         else:
-            return (self.exp[3], self.env, self.k)
+            return (self.exp[3], self.env_s, self.env_v, self.k)
 
 
 def prim_one_arg(func):
     class prim_k(Cont):
-        def __init__(self, env, k):
-            self.env = env
+        def __init__(self, env_s, env_v, k):
             self.k = k
         def plug_reduce(self, v):
             return self.k.plug_reduce(func(v))
 
     class prim_eval(Value):
-        def evaluate(self, exp, env, k):
+        def evaluate(self, exp, env_s, env_v, k):
             if isinstance(exp[1], SymbolAST):
-                v = simple_interpret(exp[1], env)
+                v = simple_interpret(exp[1], env_s, env_v)
                 return k.plug_reduce(func(v))
             else:
-                return (exp[1], env, prim_k(env, k))
+                return (exp[1], env_s, env_v, prim_k(env_s, env_v, k))
     return prim_eval
 
 def prim_two_arg(func):
     class prim_k1(Cont):
-        _attrs_ = ['exp', 'env', 'k']
-        _immutable_fields_ = ['exp', 'env', 'k']
-        def __init__(self, exp2, env, k):
+        _attrs_ = ['exp', 'env_s', 'env_v', 'k']
+        _immutable_fields_ = ['exp', 'env_s', 'env_v', 'k']
+        def __init__(self, exp2, env_s, env_v, k):
             self.exp = exp2
-            self.env = env
+            self.env_s = env_s
+            self.env_v = env_v
             self.k = k
         def plug_reduce(self, v):
             if isinstance(self.exp, SymbolAST):
-                v2 = simple_interpret(self.exp, self.env)
+                v2 = simple_interpret(self.exp, self.env_s, self.env_v)
                 return self.k.plug_reduce(func(v, v2))
             else:
-                return (self.exp, self.env, prim_k2(v, self.env, self.k))
+                return (self.exp, self.env_s, self.env_v, prim_k2(v, self.env_s, self.env_v, self.k))
 
     class prim_k2(Cont):
-        _attrs_ = ['v1', 'env', 'k']
-        _immutable_fields_ = ['v1', 'env', 'k']
-        def __init__(self, v1, env, k):
+        _attrs_ = ['v1', 'k']
+        _immutable_fields_ = ['v1', 'k']
+        def __init__(self, v1, env_s, env_v, k):
             self.v1 = v1
-            self.env = env
             self.k = k
         def plug_reduce(self, v):
             return self.k.plug_reduce(func(self.v1, v))
 
     class prim_eval(Value):
-        def evaluate(self, exp, env, k):
+        def evaluate(self, exp, env_s, env_v, k):
             if isinstance(exp[1], SymbolAST) and isinstance(exp[2], SymbolAST):
-                v1 = simple_interpret(exp[1], env)
-                v2 = simple_interpret(exp[2], env)
+                v1 = simple_interpret(exp[1], env_s, env_v)
+                v2 = simple_interpret(exp[2], env_s, env_v)
                 return k.plug_reduce(func(v1, v2))
             elif isinstance(exp[1], SymbolAST):
-                v = simple_interpret(exp[1], env)
-                return (exp[2], env, prim_k2(v, env, k))
+                v = simple_interpret(exp[1], env_s, env_v)
+                return (exp[2], env_s, env_v, prim_k2(v, env_s, env_v, k))
             else:
-                return (exp[1], env, prim_k1(exp[2], env, k))
+                return (exp[1], env_s, env_v, prim_k1(exp[2], env_s, env_v, k))
     return prim_eval
 
 class ConsCell(Value):
@@ -335,12 +338,12 @@ stdin = streamio.fdopen_as_stream(0, "r")
 stdout = streamio.fdopen_as_stream(1, "w", buffering=1)
 
 class Read(Value):
-    def evaluate(self, exp, env, k):
+    def evaluate(self, exp, env_s, env_v, k):
         val = Number(int(stdin.readline()[:-1]))
         return k.plug_reduce(val)
 
 class time_k(Cont):
-    def __init__(self, init_time, env, k):
+    def __init__(self, init_time, env_s, env_v, k):
         self.k = k
         self.init_time = init_time
     def plug_reduce(self, v):
@@ -350,9 +353,9 @@ class time_k(Cont):
         return self.k.plug_reduce(v)
         
 class Time(Value):
-    def evaluate(self, exp, env, k):
+    def evaluate(self, exp, env_s, env_v, k):
         init_time = time.clock()
-        return exp[1], env, time_k(init_time, env, k)
+        return exp[1], env_s, env_v, time_k(init_time, env_s, env_v, k)
 
 @prim_one_arg
 def display(v):

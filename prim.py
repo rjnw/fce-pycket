@@ -45,6 +45,12 @@ class EnvironmentStructure(object):
                 return i
         return -1
 
+    def __str__(self):
+        if self.prev is None:
+            return str(self.elems)
+        else:
+            return str(self.elems) + '->' + str(self.prev)
+
 def extend_env_structure(vars, prev_struct):
     return EnvironmentStructure(vars, prev_struct)
 
@@ -59,9 +65,15 @@ class EnvironmentValues(Value):
     def get_at_index(self, index):
         return self.values[index]
 
+    def __str__(self):
+        if self.prev is None:
+            return str(['*' for v in self.values])
+        else:
+            return str(['*' for v in self.values]) + '->' + str(self.prev)
+
+
 @jit.unroll_safe
-def env_lookup(env, key):
-    env_struct, env_values = env
+def env_lookup(env_struct, env_values, key):
     while env_struct is not None:
         index = env_struct.get_index(key)
         if index == -1:
@@ -71,8 +83,8 @@ def env_lookup(env, key):
             return env_values.get_at_index(index)
     raise Exception('unbound variable')
 
-def env_extend(env, vars, values):
-    env_struct_prev, env_values_prev = env
+def env_extend(env_s_prev, env_v_prev, vars, values):
+    env_struct_prev, env_values_prev = env_s_prev, env_v_prev
     new_env_struct = EnvironmentStructure(vars, env_struct_prev)
     new_env_values = EnvironmentValues(values, env_values_prev)
     return (new_env_struct, new_env_values)
