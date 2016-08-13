@@ -9,8 +9,118 @@ from rpython.rlib.objectmodel import specialize
 import time
 from ast import global_symbol_table, get_string_value
 
+def can_simple_eval(exp):
+    return isinstance(exp, SymbolAST) or isinstance(exp, NumberAST)
+
 def simple_interpret(exp, env_s, env_v):
     return env_lookup(env_s, env_v, exp.string_value)
+
+class _prim_n(Cont):
+    _immutable_fields_ = ['exp_array[*]', 'exp_offset', 'exp_getter', 'current_index', 'end_index', 'env_s', 'env_v', 'k']
+    def __init__(self, exp_array, exp_offset, exp_getter,
+                       value_array, current_index, end_index,
+                       env_s, env_v, k):
+        self.exp_array = exp_array
+        self.exp_offset = exp_offset
+        self.exp_getter = exp_getter
+        self.value_array = value_array
+        self.current_index = current_index
+        self.end_index = end_index
+        self.env_s = env_s
+        self.env_v = env_v
+        self.k = k
+
+    def plug_reduce(self, v):
+        i = self.current_index
+        self.value_array[i] = v
+        return build_prim_eval_cont(self.exp_array, self.exp_offset,
+                                    self.exp_getter, self.value_array,
+                                    i+1, self.end_index, self.env_s, self.env_v, self.k)
+
+class _prim_n_end(Cont):
+    def __init__(self, val_array, index, k):
+        self.value_array = val_array
+        self.current_index = index
+        self.k = k
+    def plug_reduce(self, v):
+        self.value_array[self.current_index] = v
+        return self.k.plug_reduce(MultiValue(self.value_array))
+
+@jit.unroll_safe
+def build_prim_eval_cont(exp_array, exp_offset, exp_getter, value_array,
+                         current_index, end_index, env_s, env_v, k):
+    i = current_index
+    while i <= end_index:
+        e = exp_getter(exp_array[i+exp_offset])
+        if can_simple_eval(e):
+            v = e.simple_eval(env_s, env_v)
+            value_array[i] = v
+            i+=1
+        else:
+            break
+    if i > end_index:
+        return k.plug_reduce(MultiValue(value_array))
+    elif i == end_index:
+        return (exp_getter(exp_array[i+exp_offset]), env_s, env_v, _prim_n_end(value_array, i, k))
+    else:
+        return (exp_getter(exp_array[i+exp_offset]), env_s, env_v,
+                           _prim_n(exp_array, exp_offset, exp_getter, value_array,
+                                   i, end_index, env_s, env_v, k))
+
+def prim_one_arg(func):
+    class prim_k(Cont):
+        def __init__(self, env_s, env_v, k):
+            self.k = k
+        def plug_reduce(self, v):
+            return self.k.plug_reduce(func(v))
+
+    class prim_eval(Value):
+        def evaluate(self, exp, env_s, env_v, k):
+            if isinstance(exp[1], SymbolAST):
+                v = simple_interpret(exp[1], env_s, env_v)
+                return k.plug_reduce(func(v))
+            else:
+                return (exp[1], env_s, env_v, prim_k(env_s, env_v, k))
+    return prim_eval
+
+def prim_two_arg(func):
+    class prim_k1(Cont):
+        _attrs_ = ['exp', 'env_s', 'env_v', 'k']
+        _immutable_fields_ = ['exp', 'env_s', 'env_v', 'k']
+        def __init__(self, exp2, env_s, env_v, k):
+            self.exp = exp2
+            self.env_s = env_s
+            self.env_v = env_v
+            self.k = k
+        def plug_reduce(self, v):
+            if isinstance(self.exp, SymbolAST):
+                v2 = simple_interpret(self.exp, self.env_s, self.env_v)
+                return self.k.plug_reduce(func(v, v2))
+            else:
+                return (self.exp, self.env_s, self.env_v,
+                        prim_k2(v, self.env_s, self.env_v, self.k))
+
+    class prim_k2(Cont):
+        _attrs_ = ['v1', 'k']
+        _immutable_fields_ = ['v1', 'k']
+        def __init__(self, v1, env_s, env_v, k):
+            self.v1 = v1
+            self.k = k
+        def plug_reduce(self, v):
+            return self.k.plug_reduce(func(self.v1, v))
+
+    class prim_eval(Value):
+        def evaluate(self, exp, env_s, env_v, k):
+            if isinstance(exp[1], SymbolAST) and isinstance(exp[2], SymbolAST):
+                v1 = simple_interpret(exp[1], env_s, env_v)
+                v2 = simple_interpret(exp[2], env_s, env_v)
+                return k.plug_reduce(func(v1, v2))
+            elif isinstance(exp[1], SymbolAST):
+                v = simple_interpret(exp[1], env_s, env_v)
+                return (exp[2], env_s, env_v, prim_k2(v, env_s, env_v, k))
+            else:
+                return (exp[1], env_s, env_v, prim_k1(exp[2], env_s, env_v, k))
+    return prim_eval
 
 class Define(Value):
     def evaluate(self, exp, env_s, env_v, k):
@@ -37,12 +147,12 @@ class Lambda(Value):
         return k.plug_reduce(Closure(body, args, env_s, env_v))
 
 class Closure(Value):
-    _attrs_ = ['body', 'args', 'env_s', 'env_v']
-    _immutable_fields_ = ['body', 'args', 'env_s', 'env_v']
-    def __init__(self, body, args, env_s, env_v, fix=None):
+    _attrs_ = ['body', 'args', 'env_s', 'env_v', 'new_env_s']
+    _immutable_fields_ = ['body', 'args', 'env_s', 'env_v', 'new_env_s']
+    def __init__(self, body, args, env_s, env_v, fix=0):
         self.body = body
         self.args = args
-        if fix is not None:
+        if fix is not 0:
             env_s, env_v = env_extend(env_s, env_v, [fix], [self])
         self.env_s = env_s
         self.env_v = env_v
@@ -53,9 +163,16 @@ class Closure(Value):
             raise Exception('list argument not implemented')
 
     def evaluate(self, exp, env_s, env_v, k):
+        ck_prev_env_v = find_env_in_chain_speculate(self.new_env_s.prev, self.env_v,
+                                                    env_s, env_v)
+        jit.promote(self.new_env_s)
+        # return eval_arg_then_apply(exp, 1, closure_exp_get, env_s, env_v,
+        #                            closure_k(self, ck_prev_env_v, k))
+
         arg_len = len(exp) - 1
         vals = [None]* arg_len
-        return (exp[1], env_s, env_v, _prim_n(exp, 2, closure_exp_get, vals, 0, arg_len-1, env_s, env_v, closure_k(self, env_s, env_v, k)))
+        return build_prim_eval_cont(exp, 1, closure_exp_get, vals,
+                                    0, arg_len-1, env_s, env_v, closure_k(self, ck_prev_env_v, k))
 
 def closure_exp_get(x):
     return x
@@ -73,49 +190,21 @@ def find_env_in_chain_speculate(target_env_structure, target_env_values, env_str
     return target_env_values
 
 class closure_k(Cont):
-    _attrs_ = ['clos', 'k', 'env_s', 'env_v']
-    _immutable_fields_ = ['clos', 'k', 'env_s', 'env_v']
-    def __init__(self, clos, env_s, env_v, k):
+    _attrs_ = ['clos', 'k', 'prev_env_v']
+    _immutable_fields_ = ['clos', 'k', 'prev_env_v']
+    def __init__(self, clos, prev_env_v, k):
         assert isinstance(clos, Closure)
         self.clos = clos
-        self.env_s = env_v
-        self.env_v = env_v
+        self.prev_env_v = prev_env_v
         self.k = k
     def plug_reduce(self, v):
-        prev_env_v = find_env_in_chain_speculate(self.clos.new_env_s.prev,
-                                            self.clos.env_v, self.env_s, self.env_v)
-        jit.promote(self.clos.new_env_s)
         assert isinstance(v, MultiValue)
         return (self.clos.body,
                 self.clos.new_env_s,
-                EnvironmentValues(v.values, prev_env_v),
+                EnvironmentValues(v.values, self.prev_env_v),
                 self.k)
 
-class _prim_n(Cont):
-    _immutable_fields_ = ['exp_array[*]', 'exp_offset', 'exp_getter', 'current_index', 'end_index', 'env_s', 'env_v', 'k']
-    def __init__(self, exp_array, exp_offset, exp_getter,
-                       value_array, current_index, end_index,
-                       env_s, env_v, k):
-        self.exp_array = exp_array
-        self.exp_offset = exp_offset
-        self.exp_getter = exp_getter
-        self.value_array = value_array
-        self.current_index = current_index
-        self.end_index = end_index
-        self.env_s = env_s
-        self.env_v = env_v
-        self.k = k
 
-    def plug_reduce(self, v):
-        self.value_array[self.current_index] = v
-        if self.current_index == self.end_index:
-            return self.k.plug_reduce(MultiValue(self.value_array))
-        else:
-            return (self.exp_getter(self.exp_array[self.current_index + self.exp_offset]),
-                    self.env_s, self.env_v,
-                    _prim_n(self.exp_array, self.exp_offset, self.exp_getter,
-                            self.value_array, self.current_index+1, self.end_index,
-                            self.env_s, self.env_v, self.k))
 
 class CapturedCont(Value):
     def __init__(self, k):
@@ -125,11 +214,12 @@ class CapturedCont(Value):
 
 class callcc_k(Cont):
     def __init__(self, env_s, env_v, k):
-        self.env_s = env_v
+        self.env_s = env_s
+        self.env_v = env_v
         self.k = k
 
     def plug_reduce(self, v):
-        ck = closure_k(v, self.env_s, self.env_v, self.k)
+        ck = closure_k(v, self.env_v, self.k) #TODO fix closure_k now takes environment structure
         return ck.plug_reduce(CapturedCont(self.k))
 
 class Callcc(Value):
@@ -223,59 +313,7 @@ class if_k(Cont):
             return (self.exp[3], self.env_s, self.env_v, self.k)
 
 
-def prim_one_arg(func):
-    class prim_k(Cont):
-        def __init__(self, env_s, env_v, k):
-            self.k = k
-        def plug_reduce(self, v):
-            return self.k.plug_reduce(func(v))
 
-    class prim_eval(Value):
-        def evaluate(self, exp, env_s, env_v, k):
-            if isinstance(exp[1], SymbolAST):
-                v = simple_interpret(exp[1], env_s, env_v)
-                return k.plug_reduce(func(v))
-            else:
-                return (exp[1], env_s, env_v, prim_k(env_s, env_v, k))
-    return prim_eval
-
-def prim_two_arg(func):
-    class prim_k1(Cont):
-        _attrs_ = ['exp', 'env_s', 'env_v', 'k']
-        _immutable_fields_ = ['exp', 'env_s', 'env_v', 'k']
-        def __init__(self, exp2, env_s, env_v, k):
-            self.exp = exp2
-            self.env_s = env_s
-            self.env_v = env_v
-            self.k = k
-        def plug_reduce(self, v):
-            if isinstance(self.exp, SymbolAST):
-                v2 = simple_interpret(self.exp, self.env_s, self.env_v)
-                return self.k.plug_reduce(func(v, v2))
-            else:
-                return (self.exp, self.env_s, self.env_v, prim_k2(v, self.env_s, self.env_v, self.k))
-
-    class prim_k2(Cont):
-        _attrs_ = ['v1', 'k']
-        _immutable_fields_ = ['v1', 'k']
-        def __init__(self, v1, env_s, env_v, k):
-            self.v1 = v1
-            self.k = k
-        def plug_reduce(self, v):
-            return self.k.plug_reduce(func(self.v1, v))
-
-    class prim_eval(Value):
-        def evaluate(self, exp, env_s, env_v, k):
-            if isinstance(exp[1], SymbolAST) and isinstance(exp[2], SymbolAST):
-                v1 = simple_interpret(exp[1], env_s, env_v)
-                v2 = simple_interpret(exp[2], env_s, env_v)
-                return k.plug_reduce(func(v1, v2))
-            elif isinstance(exp[1], SymbolAST):
-                v = simple_interpret(exp[1], env_s, env_v)
-                return (exp[2], env_s, env_v, prim_k2(v, env_s, env_v, k))
-            else:
-                return (exp[1], env_s, env_v, prim_k1(exp[2], env_s, env_v, k))
-    return prim_eval
 
 class ConsCell(Value):
     _attrs_ = ['car', 'cdr']
@@ -286,7 +324,6 @@ class ConsCell(Value):
 
 class Bool(Value):
     pass
-
 
 nil = None
 

@@ -16,6 +16,8 @@ class SymbolAST(AST):
         return global_symbol_table.num_to_symbol[self.string_value]
     def eval(self, env_s, env_v, k):
         return k.plug_reduce(env_lookup(env_s, env_v, self.string_value))
+    def simple_eval(self, env_s, env_v):
+        return env_lookup(env_s, env_v, self.string_value)
 
 class SymbolTable(object):
     def __init__(self):
@@ -48,6 +50,8 @@ class NumberAST(AST):
         return str(self.number_value.number_value)
     def eval(self, env_s, env_v, k):
         return k.plug_reduce(self.number_value)
+    def simple_eval(self, env_s, env_v):
+        return self.number_value
 
 def simple_sexp_eval(self, env_s, env_v, k):
     ev = env_lookup(env_s, env_v, self.children[0].string_value)
@@ -55,9 +59,6 @@ def simple_sexp_eval(self, env_s, env_v, k):
 
 def complex_sexp_eval(self, env_s, env_v, k):
     return self.children[0], env_s, env_v, app_k(self.children, env_s, env_v, k)
-
-def prim_sexp_eval(self, env_s, env_v, k):
-    return self._evaluator.evaluate(self.children, env_s, env_v, k)
 
 class SexpAST(AST):
     _attrs_ = ['children', '_eval', 'should_enter']

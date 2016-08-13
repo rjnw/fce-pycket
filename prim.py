@@ -3,7 +3,7 @@ from ast import *
 
 class Value(object):
     _attrs_ = []
-    def evaluate(self, exp, env, k):
+    def evaluate(self, exp, env_s , env_v, k):
         raise NotImplementedError("Abstract base class")
 
 class Cont(Value):
@@ -95,10 +95,11 @@ def create_top_level_env(names, values):
     return (env_struct, env_values)
 
 class app_k(Cont):
-    def __init__(self, exp, env, k):
+    def __init__(self, exp, env_s, env_v, k):
         self.exp = exp
-        self.env = env
+        self.env_s = env_s
+        self.env_v = env_v
         self.k = k
     def plug_reduce(self, v):
-        return v.evaluate(self.exp, self.env, self.k)
+        return v.evaluate(self.exp, self.env_s, self.env_v, self.k)
 
