@@ -14,8 +14,10 @@ class SymbolAST(AST):
         self.should_enter = False
     def tostring(self):
         return global_symbol_table.num_to_symbol[self.string_value]
+
     def eval(self, env_s, env_v, k):
         return k.plug_reduce(env_lookup(env_s, env_v, self.string_value))
+
     def simple_eval(self, env_s, env_v):
         return env_lookup(env_s, env_v, self.string_value)
 
@@ -108,3 +110,21 @@ class PrimSexpAST(AST):
 
     def eval(self, env_s, env_v, k):
         return self._evaluator.evaluate(self.children, env_s, env_v, k)
+
+class PrimFunc1AST(AST):
+    _attrs_ = _immutable_fields_ = ['func']
+    def __init__(self, func):
+        self.func = func
+
+    def eval(self, env_s, env_v, k):
+        args = env_v.values
+        return k.plug_reduce(self.func(args[0]))
+
+class PrimFunc2AST(AST):
+    _attrs_ = _immutable_fields_ = ['func']
+    def __init__(self, func):
+        self.func = func
+
+    def eval(self, env_s, env_v, k):
+        args = env_v.values
+        return k.plug_reduce(self.func(args[0], args[1]))

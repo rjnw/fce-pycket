@@ -5,7 +5,7 @@
 from prim import *
 from ast import *
 from rpython.rlib import streamio, jit
-from rpython.rlib.objectmodel import specialize
+from rpython.rlib.objectmodel import specialize, compute_unique_id
 import time
 from ast import global_symbol_table, get_string_value
 
@@ -68,58 +68,79 @@ def build_prim_eval_cont(exp_array, exp_offset, exp_getter, value_array,
                                    i, end_index, env_s, env_v, k))
 
 def prim_one_arg(func):
+    ast = PrimFunc1AST(func)
+    def create_ast_state(exp, env_s, env_v, v, k):
+        env_s = EnvironmentStructure([compute_unique_id(exp[1])], env_s)
+        env_v = EnvironmentValues([v], env_v)
+        return ast, env_s, env_v, k
+
     class prim_k(Cont):
-        def __init__(self, env_s, env_v, k):
-            self.k = k
-        def plug_reduce(self, v):
-            return self.k.plug_reduce(func(v))
-
-    class prim_eval(Value):
-        def evaluate(self, exp, env_s, env_v, k):
-            if isinstance(exp[1], SymbolAST):
-                v = simple_interpret(exp[1], env_s, env_v)
-                return k.plug_reduce(func(v))
-            else:
-                return (exp[1], env_s, env_v, prim_k(env_s, env_v, k))
-    return prim_eval
-
-def prim_two_arg(func):
-    class prim_k1(Cont):
-        _attrs_ = ['exp', 'env_s', 'env_v', 'k']
-        _immutable_fields_ = ['exp', 'env_s', 'env_v', 'k']
-        def __init__(self, exp2, env_s, env_v, k):
-            self.exp = exp2
+        def __init__(self, exp, env_s, env_v, k):
+            self.exp = exp
             self.env_s = env_s
             self.env_v = env_v
             self.k = k
         def plug_reduce(self, v):
-            if isinstance(self.exp, SymbolAST):
-                v2 = simple_interpret(self.exp, self.env_s, self.env_v)
+            #return create_ast_state(self.exp, self.env_s, self.env_v, v, self.k)
+            return self.k.plug_reduce(func(v))
+
+    class prim_eval(Value):
+        def evaluate(self, exp, env_s, env_v, k):
+            if can_simple_eval(exp[1]):
+                v = exp[1].simple_eval(env_s, env_v)
+                #return create_ast_state(exp, env_s, env_v, v, k)
+                return k.plug_reduce(func(v))
+            else:
+                return (exp[1], env_s, env_v, prim_k(exp, env_s, env_v, k))
+    return prim_eval
+
+def prim_two_arg(func):
+    ast = PrimFunc2AST(func)
+    def create_ast_state(exp, env_s, env_v, v1, v2, k):
+        env_s = EnvironmentStructure([compute_unique_id(exp[1]), compute_unique_id(exp[2])], env_s)
+        env_v = EnvironmentValues([v1, v2], env_v)
+        return ast, env_s, env_v, k
+
+    class prim_k1(Cont):
+        _attrs_ = _immutable_fields_ = ['exp', 'env_s', 'env_v', 'k']
+        def __init__(self, exp, env_s, env_v, k):
+            self.exp = exp
+            self.env_s = env_s
+            self.env_v = env_v
+            self.k = k
+        def plug_reduce(self, v):
+            if can_simple_eval(self.exp[2]):
+                v2 = self.exp[2].simple_eval(self.env_s, self.env_v)
+                #return create_ast_state(self.exp, self.env_s, self.env_v, v, v2, self.k)
                 return self.k.plug_reduce(func(v, v2))
             else:
-                return (self.exp, self.env_s, self.env_v,
-                        prim_k2(v, self.env_s, self.env_v, self.k))
+                return (self.exp[2], self.env_s, self.env_v,
+                        prim_k2(self.exp, v, self.env_s, self.env_v, self.k))
 
     class prim_k2(Cont):
-        _attrs_ = ['v1', 'k']
-        _immutable_fields_ = ['v1', 'k']
-        def __init__(self, v1, env_s, env_v, k):
+        _attrs_ = _immutable_fields_ = ['v1', 'k', 'env_s', 'env_v', 'exp']
+        def __init__(self, exp, v1, env_s, env_v, k):
+            self.exp = exp
+            self.env_s = env_s
+            self.env_v = env_v
             self.v1 = v1
             self.k = k
         def plug_reduce(self, v):
+            #return create_ast_state(self.exp, self.env_s, self.env_v, self.v1, v, self.k)
             return self.k.plug_reduce(func(self.v1, v))
 
     class prim_eval(Value):
         def evaluate(self, exp, env_s, env_v, k):
-            if isinstance(exp[1], SymbolAST) and isinstance(exp[2], SymbolAST):
-                v1 = simple_interpret(exp[1], env_s, env_v)
-                v2 = simple_interpret(exp[2], env_s, env_v)
+            if can_simple_eval(exp[1]) and can_simple_eval(exp[2]):
+                v1 = exp[1].simple_eval(env_s, env_v)
+                v2 = exp[2].simple_eval(env_s, env_v)
+                #return create_ast_state(exp, env_s, env_v, v1, v2, k)
                 return k.plug_reduce(func(v1, v2))
-            elif isinstance(exp[1], SymbolAST):
-                v = simple_interpret(exp[1], env_s, env_v)
-                return (exp[2], env_s, env_v, prim_k2(v, env_s, env_v, k))
+            elif can_simple_eval(exp[1]):
+                v = exp[1].simple_eval(env_s, env_v)
+                return (exp[2], env_s, env_v, prim_k2(exp, v, env_s, env_v, k))
             else:
-                return (exp[1], env_s, env_v, prim_k1(exp[2], env_s, env_v, k))
+                return (exp[1], env_s, env_v, prim_k1(exp, env_s, env_v, k))
     return prim_eval
 
 class Define(Value):
