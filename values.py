@@ -147,7 +147,7 @@ class Define(Value):
         body = exp[2]
         arg = exp[1]
         assert isinstance(arg, SymbolAST)
-        return (body, env_s, env_v, define_k(env_s, env_v, arg, k))
+        return (body, env_s, env_v, define_k(arg, env_s, env_v, k))
 
 class define_k(Cont):
     def __init__(self, arg, env_s, env_v, k):
@@ -156,8 +156,45 @@ class define_k(Cont):
         self.env_v = env_v
         self.k = k
     def plug_reduce(self, v):
+        if isinstance(v, Closure):
+            v = Closure(v.body, v.args, v.env_s, v.env_v, self.arg.string_value)
         e = env_extend(self.env_s, self.env_v, [self.arg.string_value], [v])
-        return k.plug_reduce(e)
+        env = EnvironmentValue(e[0], e[1])
+        return self.k.plug_reduce(env)
+
+class ModuleAST(AST):
+    _attrs_ = ['children', 'should_enter']
+    _immutable_fields_ = ['children', 'should_enter']
+    def __init__(self, children):
+        self.children = children
+        self.should_enter = False
+    def eval(self, env_s, env_v, k):
+        return (self.chlidren[0], env_s, env_v,
+                module_k(self.children,
+                         1, len(self.children), env_s, env_v, k))
+
+class module_k(Cont):
+    def __init__(self, children, current_index, end_index, env_s, env_v, k):
+        self.children = children
+        self.current_index = current_index
+        self.end_index = end_index
+        self.env_s = env_s
+        self.env_v = env_v
+        self.k = k
+    def plug_reduce(self, v):
+        if self.current_index == self.end_index:
+            return self.k.plug_reduce(EnvironmentValue(self.env_s, self.env_v))
+
+        elif isinstance(v, EnvironmentValue):
+            return (self.children[self.current_index], v.env_s, v.env_v,
+                    module_k(self.children, self.current_index+1,
+                             self.end_index, v.env_s, v.env_v, k))
+        else:
+            _prim_display(v)
+            return (self.children[self.current_index], self.env_s, self.env_v,
+                    module_k(self.children, self.current_index+1,
+                             self.end_index, self.env_s, self.env_v, k))
+
 
 class Lambda(Value):
     def evaluate(self, exp, env_s, env_v, k):
@@ -330,9 +367,6 @@ class if_k(Cont):
         else:
             return (self.exp[3], self.env_s, self.env_v, self.k)
 
-
-
-
 class ConsCell(Value):
     _attrs_ = ['car', 'cdr']
     _immutable_fields_ = ['car', 'cdr']
@@ -343,6 +377,10 @@ class ConsCell(Value):
 class Bool(Value):
     pass
 
+class Void(Value):
+    pass
+
+void = Void()
 nil = None
 
 true = Bool()
@@ -412,12 +450,29 @@ class Time(Value):
         init_time = time.clock()
         return exp[1], env_s, env_v, time_k(init_time, env_s, env_v, k)
 
+def _prim_display(v):
+    if isinstance(v, Number):
+        stdout.write(str(v.number_value))
+    elif isinstance(v, Void):
+        stdout('#<void>')
+    elif isinstance(v, Bool):
+        if v == true:
+            stdout.write('#t')
+        else:
+            stdout.write('#f')
+    elif isinstance(v, Closure):
+        stdout.write('#<procedure>')
+    elif isinstance(v, ConsCell):
+        pass #TODO print cons
+    else:
+        raise Exception('unknown type to print')
+    stdout.flush()
+
+
 @prim_one_arg
 def display(v):
-    assert isinstance(v, Number)
-    stdout.write(str(v.number_value))
-    stdout.flush()
-    return v
+    _prim_display(v)
+    return void
 
 class halt_k(Cont):
     def __init__(self):
@@ -437,8 +492,8 @@ PRIM_NAMES = map(get_string_value,
                  map(get_symbol_ast,
                  ['lambda', 'let', 'if', 'true', 'false',
                   'zero?', '+', '-', 'cons', 'car', 'cdr', '*', 'call/cc',
-                  'letrec', 'read', 'display', 'time', 'begin0']))
+                  'letrec', 'read', 'display', 'time', 'begin0', 'define']))
 PRIM_VALUES = [Lambda(), Let(), If(), true, false, zero_huh(), add(),
                        sub(), cons(), car(), cdr(), mult(), Callcc(),
-                       Fix(), Read(), display(), Time(), begin0()]
+                       Fix(), Read(), display(), Time(), begin0(), Define()]
 

@@ -49,6 +49,11 @@ class EnvironmentStructure(object):
             return str(self.elems)
         else:
             return str(self.elems) + '->' + str(self.prev)
+class EnvironmentValue(Value):
+    _attrs_ = _immutable_fields_ = ['env_v', 'env_s']
+    def __init__(self, env_s, env_v):
+        self.env_s = env_s
+        self.env_v = env_v
 
 def create_new_env_cache(elem_len):
     class EnvironmentStructureCache(object):
@@ -93,9 +98,6 @@ def create_new_env_structure(elems, prev_s):
         new_s = EnvironmentStructure(elems, prev_s)
         return new_s
 
-def extend_env_structure(vars, prev_struct):
-    return EnvironmentStructure(vars, prev_struct)
-
 class EnvironmentValues(Value):
     _immutable_ = True
     _attrs_ = ['values', 'prev']
@@ -127,7 +129,7 @@ def env_lookup(env_struct, env_values, key):
 
 def env_extend(env_s_prev, env_v_prev, vars, values):
     env_struct_prev, env_values_prev = env_s_prev, env_v_prev
-    new_env_struct = EnvironmentStructure(vars, env_struct_prev)
+    new_env_struct = create_new_env_structure(vars, env_struct_prev)
     new_env_values = EnvironmentValues(values, env_values_prev)
     return (new_env_struct, new_env_values)
 
@@ -144,7 +146,6 @@ class app_k(Cont):
         self.k = k
     def plug_reduce(self, v):
         return v.evaluate(self.exp, self.env_s, self.env_v, self.k)
-
 
 
 ##AST
@@ -231,16 +232,6 @@ class SexpAST(AST):
 
     def eval(self, env_s, env_v, k):
         return self._eval(self, env_s, env_v, k)
-
-class ModuleAST(AST):
-    _attrs_ = ['children', 'should_enter']
-    _immutable_fields_ = ['children', 'should_enter']
-    def __init__(self, children):
-        self.children = children
-        self.should_enter = False
-    def eval(self, env_s, env_v, k):
-        return self.chlidren[0], env_s, env_v, module_k(self.children,
-                                                        1, len(self.children), env_s, env_v, k)
 
 class PrimSexpAST(AST):
     _attrs_ = ['children', 'should_enter', '_evaluator']
