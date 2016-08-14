@@ -1,6 +1,5 @@
 import string
-from ast import NumberAST, SexpAST, SymbolAST, PrimSexpAST, global_symbol_table
-#from values import PRIM_NAMES
+from prim import *
 
 def skip_whitespace(st, ind):
     while  ind < len(st) and st[ind] in string.whitespace:

@@ -3,7 +3,7 @@
 #
 
 from parse import *
-from ast import *
+from prim import *
 from values import *
 import pdb
 

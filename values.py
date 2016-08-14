@@ -3,11 +3,9 @@
 #
 
 from prim import *
-from ast import *
 from rpython.rlib import streamio, jit
 from rpython.rlib.objectmodel import specialize, compute_unique_id
 import time
-from ast import global_symbol_table, get_string_value
 
 def can_simple_eval(exp):
     return isinstance(exp, SymbolAST) or isinstance(exp, NumberAST)
@@ -16,7 +14,8 @@ def simple_interpret(exp, env_s, env_v):
     return env_lookup(env_s, env_v, exp.string_value)
 
 class _prim_n(Cont):
-    _immutable_fields_ = ['exp_array[*]', 'exp_offset', 'exp_getter', 'current_index', 'end_index', 'env_s', 'env_v', 'k']
+    _immutable_fields_ = ['exp_array[*]', 'exp_offset', 'exp_getter',
+                          'current_index', 'end_index', 'env_s', 'env_v', 'k']
     def __init__(self, exp_array, exp_offset, exp_getter,
                        value_array, current_index, end_index,
                        env_s, env_v, k):
@@ -97,7 +96,7 @@ def prim_one_arg(func):
 def prim_two_arg(func):
     ast = PrimFunc2AST(func)
     def create_ast_state(exp, env_s, env_v, v1, v2, k):
-        env_s = EnvironmentStructure([compute_unique_id(exp[1]), compute_unique_id(exp[2])], env_s)
+        env_s = create_new_env_structure([compute_unique_id(exp[1]), compute_unique_id(exp[2])], env_s)
         env_v = EnvironmentValues([v1, v2], env_v)
         return ast, env_s, env_v, k
 
@@ -178,7 +177,7 @@ class Closure(Value):
         self.env_s = env_s
         self.env_v = env_v
         if isinstance(args, SexpAST):
-            self.new_env_s = EnvironmentStructure([var.string_value for var in args.children],
+            self.new_env_s = create_new_env_structure([var.string_value for var in args.children],
                                                    self.env_s)
         else:
             raise Exception('list argument not implemented')
@@ -187,8 +186,6 @@ class Closure(Value):
         ck_prev_env_v = find_env_in_chain_speculate(self.new_env_s.prev, self.env_v,
                                                     env_s, env_v)
         jit.promote(self.new_env_s)
-        # return eval_arg_then_apply(exp, 1, closure_exp_get, env_s, env_v,
-        #                            closure_k(self, ck_prev_env_v, k))
 
         arg_len = len(exp) - 1
         vals = [None]* arg_len
@@ -292,7 +289,7 @@ class Let(Value):
         assert isinstance(var_val_exp, SexpAST)
         vars = [e[0].string_value for e in var_val_exp.children]
         vals = [None]*len(vars)
-        env_struct = EnvironmentStructure(vars, env_s)
+        env_struct = create_new_env_structure(vars, env_s)
         body_exp = exp[2]
         return (var_val_exp[0][1], env_s, env_v,
                 _prim_n(var_val_exp.children, 1, let_exp_get, vals, 0, len(vars)-1, env_s, env_v,
@@ -418,7 +415,7 @@ class Time(Value):
 @prim_one_arg
 def display(v):
     assert isinstance(v, Number)
-    stdout.write(str(v.number_value)+'\n')
+    stdout.write(str(v.number_value))
     stdout.flush()
     return v
 

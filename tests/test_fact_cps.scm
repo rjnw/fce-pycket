@@ -1,3 +1,4 @@
+;#lang racket
 (time
  (display
   (let ((y 20))
