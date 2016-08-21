@@ -46,9 +46,10 @@ class EnvironmentStructure(object):
 
     def __str__(self):
         if self.prev is None:
-            return str(self.elems)
+            return str(map(get_ast_string, self.elems))
         else:
-            return str(self.elems) + '->' + str(self.prev)
+            return str(map(get_ast_string, self.elems)) + '->' + str(self.prev)
+
 class EnvironmentValue(Value):
     _attrs_ = _immutable_fields_ = ['env_v', 'env_s']
     def __init__(self, env_s, env_v):
@@ -111,9 +112,9 @@ class EnvironmentValues(Value):
 
     def __str__(self):
         if self.prev is None:
-            return str(['*' for v in self.values])
+            return str(self.values)
         else:
-            return str(['*' for v in self.values]) + '->' + str(self.prev)
+            return str(self.values) + '->' + str(self.prev)
 
 
 @jit.unroll_safe
@@ -125,7 +126,8 @@ def env_lookup(env_struct, env_values, key):
             env_values = env_values.prev
         else:
             return env_values.get_at_index(index)
-    raise Exception('unbound variable')
+    
+    raise Exception('unbound variable', get_ast_string(key))
 
 def env_extend(env_s_prev, env_v_prev, vars, values):
     env_struct_prev, env_values_prev = env_s_prev, env_v_prev
@@ -188,8 +190,14 @@ class SymbolTable(object):
 
 global_symbol_table = SymbolTable()
 
+def get_ast_string(string_value):
+    return global_symbol_table.num_to_symbol[string_value]
+
 def get_string_value(s_ast):
     return s_ast.string_value
+
+def get_symbol_ast(symbol):
+    return global_symbol_table.make_symbol_ast(symbol)
 
 class NumberAST(AST):
     _attrs_ = ['number_value', 'should_enter']

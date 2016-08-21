@@ -22,7 +22,7 @@ def parse_exp(st, curr_ind, init_env, captured_env=False):
     elif st[curr_ind] == "'":
         t, i = parse_exp(st, curr_ind+1, init_env, captured_env)
         return SexpAST([global_symbol_table.make_symbol_ast('quote')] +[t]), i
-    elif st[curr_ind] == ';':
+    elif st[curr_ind] in ';#':
         while st[curr_ind] != '\n':
             curr_ind += 1
         return parse_exp(st, curr_ind+1, init_env, captured_env)
@@ -52,6 +52,7 @@ def parse_module(st, init_env=None):
 
 def get_ast(tokens, captured_env, init_env):
     return SexpAST(list(tokens))
+
     if (not captured_env) and \
        isinstance(tokens[0], SymbolAST) and \
        tokens[0].string_value in PRIM_NAMES:

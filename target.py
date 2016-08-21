@@ -5,6 +5,7 @@
 from parse import *
 from prim import *
 from values import *
+from initenv import global_initial_env
 import pdb
 
 from rpython.rlib.jit import JitDriver
@@ -16,7 +17,8 @@ jitdriver = JitDriver(greens=['exp', 'env_struct'],
                       reds=['env_values', 'k'],
                       get_printable_location=get_printable_location)
 
-INIT_ENV = create_top_level_env(PRIM_NAMES, PRIM_VALUES)
+INIT_ENV = create_top_level_env(map(get_string_value, global_initial_env.prim_names),
+                                 global_initial_env.prim_values)
 
 def eval(t):
     exp, env_s, env_v, k = t
@@ -42,7 +44,11 @@ def entry_point(argv):
     fp = os.open(filename, os.O_RDONLY, 0777)
     src = os.read(fp, 4096)
     os.close(fp)
-    init_ast = convert_to_ast(src, INIT_ENV)
+    start_module = parse_module(src)
+    if len(start_module) == 1:
+        init_ast = start_module[0]
+    else:
+        init_ast = ModuleAST(list(start_module))
     env_s, env_v = INIT_ENV
     tramp = (init_ast, env_s, env_v, halt_k())
     try:

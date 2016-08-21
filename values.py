@@ -3,6 +3,7 @@
 #
 
 from prim import *
+from initenv import prim, prim_value
 from rpython.rlib import streamio, jit
 from rpython.rlib.objectmodel import specialize, compute_unique_id
 import time
@@ -142,6 +143,7 @@ def prim_two_arg(func):
                 return (exp[1], env_s, env_v, prim_k1(exp, env_s, env_v, k))
     return prim_eval
 
+@prim('define')
 class Define(Value):
     def evaluate(self, exp, env_s, env_v, k):
         body = exp[2]
@@ -169,7 +171,7 @@ class ModuleAST(AST):
         self.children = children
         self.should_enter = False
     def eval(self, env_s, env_v, k):
-        return (self.chlidren[0], env_s, env_v,
+        return (self.children[0], env_s, env_v,
                 module_k(self.children,
                          1, len(self.children), env_s, env_v, k))
 
@@ -188,14 +190,15 @@ class module_k(Cont):
         elif isinstance(v, EnvironmentValue):
             return (self.children[self.current_index], v.env_s, v.env_v,
                     module_k(self.children, self.current_index+1,
-                             self.end_index, v.env_s, v.env_v, k))
+                             self.end_index, v.env_s, v.env_v, self.k))
         else:
             _prim_display(v)
             return (self.children[self.current_index], self.env_s, self.env_v,
                     module_k(self.children, self.current_index+1,
-                             self.end_index, self.env_s, self.env_v, k))
+                             self.end_index, self.env_s, self.env_v, self.k))
 
 
+@prim('lambda')
 class Lambda(Value):
     def evaluate(self, exp, env_s, env_v, k):
         args = exp[1]
@@ -320,6 +323,7 @@ class let_k(Cont):
 def let_exp_get(exp):
     return exp[1]
 
+@prim('let')
 class Let(Value):
     def evaluate(self, exp, env_s, env_v, k):
         var_val_exp = exp[1]
@@ -344,6 +348,7 @@ class fix_k(Cont):
         new_v = Closure(v.body, v.args, v.env_s, v.env_v, self.var.string_value)
         return (self.body, new_v.env_s, new_v.env_v, self.k)
 
+@prim('letrec')
 class Fix(Value):
     def evaluate(self, exp, env_s, env_v, k):
         var = exp[1][0][0]
@@ -351,6 +356,7 @@ class Fix(Value):
         body_exp = exp[2]
         return (val_exp, env_s, env_v, fix_k(var, body_exp, env_s, env_v, k))
 
+@prim('if')
 class If(Value):
     def evaluate(self, exp, env_s, env_v, k):
         return (exp[1], env_s, env_v, if_k(exp, env_s, env_v, k))
@@ -386,39 +392,74 @@ nil = None
 true = Bool()
 false = Bool()
 
+@prim('begin')
 @prim_two_arg
 def begin0(v1, v2):
     return v2
 
+@prim('cons')
 @prim_two_arg
 def cons(car, cdr):
     return ConsCell(car, cdr)
 
+@prim('car')
 @prim_one_arg
 def car(ls):
     assert isinstance(ls, ConsCell)
     return ls.car
 
+@prim('cdr')
 @prim_one_arg
 def cdr(ls):
     assert isinstance(ls, ConsCell)
     return ls.cdr
 
+@prim('+')
 @prim_two_arg
 def add(e1, e2):
     assert isinstance(e1, Number) and isinstance(e2, Number)
     return Number(e1.number_value + e2.number_value)
 
+@prim('-')
 @prim_two_arg
 def sub(e1, e2):
     assert isinstance(e1, Number) and isinstance(e2, Number)
     return Number(e1.number_value - e2.number_value)
 
+@prim('<')
+@prim_two_arg
+def less_than(e1, e2):
+    assert isinstance(e1, Number) and isinstance(e2, Number)
+    if e1.number_value < e2.number_value:
+        return true
+    else:
+        return false
+
+@prim('>')
+@prim_two_arg
+def greater_than(e1, e2):
+    assert isinstance(e1, Number) and isinstance(e2, Number)
+    if e1.number_value < e2.number_value:
+        return false
+    else:
+        return true
+    
+@prim('=')
+@prim_two_arg
+def equal(e1, e2):
+    assert isinstance(e1, Number) and isinstance(e2, Number)
+    if e1.number_value == e2.number_value:
+        return true
+    else:
+        return false
+
+@prim('*')
 @prim_two_arg
 def mult(e1, e2):
     assert isinstance(e1, Number) and isinstance(e2, Number)
     return Number(e1.number_value * e2.number_value)
 
+@prim('zero?')
 @prim_one_arg
 def zero_huh(v):
     assert isinstance(v, Number)
@@ -427,9 +468,18 @@ def zero_huh(v):
     else:
         return false
 
+@prim('not')
+@prim_one_arg
+def not_bool(e1):
+    if isinstance(e1, Bool) and e1 == false:
+        return true
+    else:
+        return false
+
 stdin = streamio.fdopen_as_stream(0, "r")
 stdout = streamio.fdopen_as_stream(1, "w", buffering=1)
 
+@prim('read')
 class Read(Value):
     def evaluate(self, exp, env_s, env_v, k):
         val = Number(int(stdin.readline()[:-1]))
@@ -445,6 +495,7 @@ class time_k(Cont):
         stdout.write('cpu time: '+t+' real time: '+t+' gc time: 0\n')
         return self.k.plug_reduce(v)
         
+@prim('time')
 class Time(Value):
     def evaluate(self, exp, env_s, env_v, k):
         init_time = time.clock()
@@ -454,7 +505,7 @@ def _prim_display(v):
     if isinstance(v, Number):
         stdout.write(str(v.number_value))
     elif isinstance(v, Void):
-        stdout('#<void>')
+        stdout.write('#<void>')
     elif isinstance(v, Bool):
         if v == true:
             stdout.write('#t')
@@ -469,6 +520,7 @@ def _prim_display(v):
     stdout.flush()
 
 
+@prim('display')
 @prim_one_arg
 def display(v):
     _prim_display(v)
@@ -485,15 +537,12 @@ class Done(Exception):
         self.value = val
 
 
-def get_symbol_ast(symbol):
-    return global_symbol_table.make_symbol_ast(symbol)
-
 PRIM_NAMES = map(get_string_value,
                  map(get_symbol_ast,
                  ['lambda', 'let', 'if', 'true', 'false',
                   'zero?', '+', '-', 'cons', 'car', 'cdr', '*', 'call/cc',
-                  'letrec', 'read', 'display', 'time', 'begin0', 'define']))
+                  'letrec', 'read', 'display', 'time', 'begin0', 'define', '<', '>', '=', 'not']))
 PRIM_VALUES = [Lambda(), Let(), If(), true, false, zero_huh(), add(),
                        sub(), cons(), car(), cdr(), mult(), Callcc(),
-                       Fix(), Read(), display(), Time(), begin0(), Define()]
+                       Fix(), Read(), display(), Time(), begin0(), Define(), less_than(), greater_than(), equal(), not_bool()]
 
