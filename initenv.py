@@ -10,9 +10,11 @@ class InitialEnvironment(object):
 
 global_initial_env = InitialEnvironment()
 
-def prim(name):
+def prim(*names):
     def decorate(cls):
-        global_initial_env.add_prim(name, cls())
+        c = cls()
+        for name in names:
+            global_initial_env.add_prim(name, cls())
         return cls
     return decorate
 
