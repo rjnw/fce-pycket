@@ -53,13 +53,6 @@ def parse_module(st, init_env=None):
 def get_ast(tokens, captured_env, init_env):
     return SexpAST(list(tokens))
 
-    if (not captured_env) and \
-       isinstance(tokens[0], SymbolAST) and \
-       tokens[0].string_value in PRIM_NAMES:
-        return PrimSexpAST(list(tokens), init_env)
-    else:
-        return SexpAST(list(tokens))
-
 def with_captured_env(token):
     return isinstance(token, SymbolAST) and \
         (token.string_value == global_symbol_table.make_symbol_ast('with-captured-environment').string_value)

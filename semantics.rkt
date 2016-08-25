@@ -2,7 +2,6 @@
 
 (require redex)
 
-
 (define-language fe-pycket
   [e ::= x b (e ...) s]
   [b ::= number]
@@ -10,7 +9,7 @@
   [prim ::= + -]
   [s ::= lambda let + -]
   [v ::= b (closure x e ρ) s]
-;  [C ::= hole (C e ...)]
+  [sv ::= s v]
   [ρ ::= () (x v ρ) (x s ρ)]
 
   [κ ::=
@@ -25,7 +24,7 @@
 
 
 (define-metafunction fe-pycket
-  ρ-lookup : ρ x -> v
+  ρ-lookup : ρ x -> sv
   [(ρ-lookup () x) x]
   [(ρ-lookup (x v ρ) x) v]
   [(ρ-lookup (x_1 _ ρ)) (ρ-lookup ρ x)])
@@ -42,7 +41,7 @@
 
 
 (define-metafunction fe-pycket
-  plug-reduce : κ v -> state
+  plug-reduce : κ sv -> state
   [(plug-reduce (letk x_1 e_2 ρ κ) v) (e_2 (x_1 v ρ) κ)]
   [(plug-reduce (lambdak x_1 e_2 ρ κ) v) (e_2 (x_1 v ρ) κ)]
   [(plug-reduce (prim1k prim e ρ κ) v) (e ρ (prim2k prim v κ))]
@@ -51,7 +50,7 @@
   [(plug-reduce haltk v) (end v)])
 
 (define-metafunction fe-pycket
-  δ : v e ρ κ -> state
+  δ : sv e ρ κ -> state
   [(δ (closure x_1 e_2 ρ_1) (e_3) ρ κ) (e_3 ρ (lambdak x_1 e_2 ρ_1 κ))]
   [(δ lambda ((x_1) e_2) ρ κ) (plug-reduce κ (closure x_1 e_2 ρ))]
   [(δ let (((x_1 e_1)) e_2) ρ κ) (e_1 ρ (letk x_1 e_2 ρ κ))]
@@ -65,6 +64,9 @@
 
 ;(define init-env ()) ;;no need as the env-lookup is kinda funky and returns the symbol if not
 ;; found and we want to do the same in initial environment
-(traces → (term ((+ 1 1) () haltk)))
-(traces → (term ((+ 1 (- 10 9)) () haltk)))
-(traces → (term (((lambda (x) x) 3) () haltk)))
+
+;; (traces → (term ((+ 1 1) () haltk)))
+;; (traces → (term ((+ 1 (- 10 9)) () haltk)))
+;; (traces → (term (((lambda (x) x) 3) () haltk)))
+;(traces → (term ((let ((x 42)) x) () haltk)))
+(traces → (term (((lambda (x) (x ((y 42)) y)) let) () haltk)))

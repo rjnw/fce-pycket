@@ -68,11 +68,11 @@ def build_prim_eval_cont(exp_array, exp_offset, exp_getter, value_array,
                                    i, end_index, env_s, env_v, k))
 
 def prim_one_arg(func):
-    ast = PrimFunc1AST(func)
-    def create_ast_state(exp, env_s, env_v, v, k):
-        env_s = EnvironmentStructure([compute_unique_id(exp[1])], env_s)
-        env_v = EnvironmentValues([v], env_v)
-        return ast, env_s, env_v, k
+    # ast = PrimFunc1AST(func)
+    # def create_ast_state(exp, env_s, env_v, v, k):
+    #     env_s = EnvironmentStructure([compute_unique_id(exp[1])], env_s)
+    #     env_v = EnvironmentValues([v], env_v)
+    #     return ast, env_s, env_v, k
 
     class prim_k(Cont):
         def __init__(self, exp, env_s, env_v, k):
@@ -95,11 +95,11 @@ def prim_one_arg(func):
     return prim_eval
 
 def prim_two_arg(func):
-    ast = PrimFunc2AST(func)
-    def create_ast_state(exp, env_s, env_v, v1, v2, k):
-        env_s = create_new_env_structure([compute_unique_id(exp[1]), compute_unique_id(exp[2])], env_s)
-        env_v = EnvironmentValues([v1, v2], env_v)
-        return ast, env_s, env_v, k
+    # ast = PrimFunc2AST(func)
+    # def create_ast_state(exp, env_s, env_v, v1, v2, k):
+    #     env_s = create_new_env_structure([compute_unique_id(exp[1]), compute_unique_id(exp[2])], env_s)
+    #     env_v = EnvironmentValues([v1, v2], env_v)
+    #     return ast, env_s, env_v, k
 
     class prim_k1(Cont):
         _attrs_ = _immutable_fields_ = ['exp', 'env_s', 'env_v', 'k']
@@ -392,7 +392,7 @@ nil = None
 true = Bool()
 false = Bool()
 
-@prim('begin')
+@prim('begin0')
 @prim_two_arg
 def begin0(v1, v2):
     return v2

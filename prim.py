@@ -1,5 +1,18 @@
 from rpython.rlib import jit
 
+class State(Exception):
+    _attrs_ = []
+    pass
+class EvalExp(State):
+    _attrs_ = _immutable_fields_ = ['t']
+    def __init__(self, t):
+        self.t = t
+
+class PlugReduce(State):
+    _attrs_ = _immutable_fields_ = ['t']
+    def __init__(self, t):
+        self.t = t
+
 class Value(object):
     _attrs_ = []
     def evaluate(self, exp, env_s , env_v, k):
@@ -241,37 +254,44 @@ class SexpAST(AST):
     def eval(self, env_s, env_v, k):
         return self._eval(self, env_s, env_v, k)
 
-class PrimSexpAST(AST):
-    _attrs_ = ['children', 'should_enter', '_evaluator']
-    _immutable_fields_ = ['children[*]', '_evaluator', 'should_enter']
-    def __init__(self, children, init_env):
-        self.children = children
+class LambdaAST(AST):
+    def __init__(self, vars, body):
+        self.vars = vars
+        self.body = body
+        self.body.should_enter = True
         self.should_enter = False
-        self._evaluator = env_lookup(init_env[0], init_env[1], self.children[0].string_value)
-
-    def __getitem__(self, key):
-        return self.children[key]
-
-    def tostring(self):
-        return '(' + ' '.join([ast.tostring() for ast in self.children]) + ')'
-
+        self.top_env_s = [var.string_value for var in vars]
     def eval(self, env_s, env_v, k):
-        return self._evaluator.evaluate(self.children, env_s, env_v, k)
+        return k.plug_reduce(Closure(self, env_s, env_v))
+def indentity(x):
+    return x
+class Closure(Value):
+    def __init__(self, lambda_ast, env_s, env_v):
+        self.lambda_ast = lambda_ast
+        self.env_s = env_s
+        self.env_v = env_v
+    def eval_exp(self, exp, env_s, env_v, k):
+        vals = [None]*len(exp.children)
+        return build_prim_eval_cont(self.exp.children, 1, identity, vals, 1, len(exp.children)-1, env_s, env_v, closure_k(self, k))
 
-class PrimFunc1AST(AST):
-    _attrs_ = _immutable_fields_ = ['func']
-    def __init__(self, func):
-        self.func = func
-
+class LetAST(AST):
+    def __init__(self, vars, var_vals, body):
+        self.vars = vars
+        self.var_vals = var_vals
+        self.body = body
+        self.should_enter = False
+        self.top_env_s = [var.string_value for var in vars]
     def eval(self, env_s, env_v, k):
-        args = env_v.values
-        return k.plug_reduce(self.func(args[0]))
-
-class PrimFunc2AST(AST):
-    _attrs_ = _immutable_fields_ = ['func']
-    def __init__(self, func):
-        self.func = func
-
-    def eval(self, env_s, env_v, k):
-        args = env_v.values
-        return k.plug_reduce(self.func(args[0], args[1]))
+        vals = [None]*len(vars)
+        return (self.var_vals[0], env_s, env_v,
+                _prim_n(self.var_vals, 1, len(vars), env_s, env_v, let_k(self, env_s, env_v, k)))
+class let_k(Cont):
+    def __init__(self, let_ast, env_s, env_v, k):
+        self.let_ast = let_ast
+        self.env_s = env_s
+        self.env_v = env_v
+        self.k = k
+    def plug_reduce(self, v):
+        assert isinstance(v, MultiValue)
+        new_env_s = create_new_env_structure(self.let_ast.top_env_s, self.env_s)
+        return (self.let_ast.body, new_env_s, EnvironmentValues(v.values, self.env_v), self.k)
