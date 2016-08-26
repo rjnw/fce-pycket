@@ -50,8 +50,32 @@ def parse_module(st, init_env=None):
         asts.append(t)
     return asts
 
+lambda_symbol = global_symbol_table.make_symbol_ast('lambda')
+let_symbol = global_symbol_table.make_symbol_ast('let')
+letrec_symbol = global_symbol_table.make_symbol_ast('letrec')
+if_symbol = global_symbol_table.make_symbol_ast('if')
+begin_symbol = global_symbol_table.make_symbol_ast('begin')
+
 def get_ast(tokens, captured_env, init_env):
-    return SexpAST(list(tokens))
+    rator = tokens[0]
+    if isinstance(rator, SexpAST):
+        return SexpAST(list(tokens))
+    elif rator.string_value == lambda_symbol.string_value:
+        return LambdaAST(tokens[1].children, tokens[2])
+    elif rator.string_value == let_symbol.string_value:
+        vars = [e[0] for e in tokens[1].children]
+        var_vals = [e[1] for e in tokens[1].children]
+        return LetAST(vars, var_vals, tokens[2])
+    elif rator.string_value == letrec_symbol.string_value:
+        var = tokens[1][0].children[0]
+        var_val = tokens[1][0].children[1]
+        return LetrecAST(var, var_val, tokens[2])
+    elif rator.string_value == if_symbol.string_value:
+        return IfAST(tokens[1], tokens[2], tokens[3])
+    elif rator.string_value == begin_symbol.string_value:
+        return BeginAST(list(tokens))
+    else:
+        return SexpAST(list(tokens))
 
 def with_captured_env(token):
     return isinstance(token, SymbolAST) and \

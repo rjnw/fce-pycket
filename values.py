@@ -8,12 +8,6 @@ from rpython.rlib import streamio, jit
 from rpython.rlib.objectmodel import specialize, compute_unique_id
 import time
 
-def can_simple_eval(exp):
-    return isinstance(exp, SymbolAST) or isinstance(exp, NumberAST)
-
-def simple_interpret(exp, env_s, env_v):
-    return env_lookup(env_s, env_v, exp.string_value)
-
 class _prim_n(Cont):
     _immutable_fields_ = ['exp_array[*]', 'exp_offset', 'exp_getter',
                           'current_index', 'end_index', 'env_s', 'env_v', 'k']
@@ -235,18 +229,6 @@ class Closure(Value):
 def closure_exp_get(x):
     return x
 
-@jit.unroll_safe
-def find_env_in_chain_speculate(target_env_structure, target_env_values, env_structure, env_values):
-    jit.promote(target_env_structure)
-    jit.promote(env_structure)
-    while env_structure is not None:
-        if env_structure is target_env_structure:
-            if env_values is target_env_values:
-                return env_values
-        env_values = env_values.prev
-        env_structure = env_structure.prev
-    return target_env_values
-
 class closure_k(Cont):
     _attrs_ = ['clos', 'k', 'prev_env_v']
     _immutable_fields_ = ['clos', 'k', 'prev_env_v']
@@ -379,18 +361,6 @@ class ConsCell(Value):
     def __init__(self, car, cdr):
         self.car = car
         self.cdr = cdr
-
-class Bool(Value):
-    pass
-
-class Void(Value):
-    pass
-
-void = Void()
-nil = None
-
-true = Bool()
-false = Bool()
 
 @prim('begin0')
 @prim_two_arg

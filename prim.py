@@ -254,6 +254,76 @@ class SexpAST(AST):
     def eval(self, env_s, env_v, k):
         return self._eval(self, env_s, env_v, k)
 
+@jit.unroll_safe
+def find_env_in_chain_speculate(target_env_structure, target_env_values, env_structure, env_values):
+    """
+    finds the Environment Structure of shape target_env_structure in env_structure
+    and returns the Environment Values for that environment structure. Used to tell jit that
+    the environment closure is evaluating can be get from the environment where closure was
+    constructed, which happens most of the time.
+    """
+    jit.promote(target_env_structure)
+    jit.promote(env_structure)
+    while env_structure is not None:
+        if env_structure is target_env_structure:
+            if env_values is target_env_values:
+                return env_values
+        env_values = env_values.prev
+        env_structure = env_structure.prev
+    return target_env_values
+
+def build_prim_eval_cont(exp_array, exp_offset, value_array,
+                         current_index, end_index, env_s, env_v, k):
+    #we are using the same value array across the whole evaluation of arguments. 
+    #If the continuation gets captured and is used in a weird way could cause problems.
+    i = current_index
+    while i < end_index:
+        e = exp_array[i+exp_offset]
+        if can_simple_eval(e):
+            v = e.simple_eval(env_s, env_v)
+            value_array[i] = v
+            i+=1
+        else:
+            break
+    if i == end_index:
+        return k.plug_reduce(MultiValue(value_array))
+    elif i == end_index-1:
+        return (exp_array[i+exp_offset], env_s, env_v, _prim_n_end(value_array, i, k))
+    else:
+        return (exp_array[i+exp_offset], env_s, env_v,
+                           _prim_n(exp_array, exp_offset, value_array,
+                                   i, end_index, env_s, env_v, k))
+class _prim_n(Cont):
+    _immutable_fields_ = ['exp_array[*]', 'exp_offset', 
+                          'current_index', 'end_index', 'env_s', 'env_v', 'k']
+    def __init__(self, exp_array, exp_offset,
+                       value_array, current_index, end_index,
+                       env_s, env_v, k):
+        self.exp_array = exp_array
+        self.exp_offset = exp_offset
+        self.value_array = value_array
+        self.current_index = current_index
+        self.end_index = end_index
+        self.env_s = env_s
+        self.env_v = env_v
+        self.k = k
+
+    def plug_reduce(self, v):
+        i = self.current_index
+        self.value_array[i] = v
+        return build_prim_eval_cont(self.exp_array, self.exp_offset,
+                                    self.value_array,
+                                    i+1, self.end_index, self.env_s, self.env_v, self.k)
+
+class _prim_n_end(Cont):
+    def __init__(self, val_array, index, k):
+        self.value_array = val_array
+        self.current_index = index
+        self.k = k
+    def plug_reduce(self, v):
+        self.value_array[self.current_index] = v
+        return self.k.plug_reduce(MultiValue(self.value_array))
+
 class LambdaAST(AST):
     def __init__(self, vars, body):
         self.vars = vars
@@ -265,14 +335,38 @@ class LambdaAST(AST):
         return k.plug_reduce(Closure(self, env_s, env_v))
 def indentity(x):
     return x
+
 class Closure(Value):
-    def __init__(self, lambda_ast, env_s, env_v):
+    def __init__(self, lambda_ast, env_s, env_v, fix=0):
+        assert isinstance(lambda_ast, LambdaAST)
         self.lambda_ast = lambda_ast
+        if fix == 0:
+            self.env_s = env_s
+            self.env_v = env_v
+        else:
+            self.env_s = create_new_env_structure([fix], env_s)
+            self.env_v = EnvironmentValues([self], env_v)
+    def evaluate(self, exp, env_s, env_v, k):
+        vals = [None]*(len(exp)-1)
+        new_env_s = create_new_env_structure(self.lambda_ast.top_env_s, self.env_s)
+        prev_env_v = find_env_in_chain_speculate(new_env_s.prev, self.env_v, env_s, env_v)
+
+        return build_prim_eval_cont(exp, 1, vals,
+                                    0, len(exp)-1,
+                                    env_s, env_v,
+                                    closure_k(self, k, new_env_s, prev_env_v))
+class closure_k(Cont):
+    def __init__(self, closure, k, env_s, prev_env_v):
+        assert isinstance(closure, Closure)
+        self.closure = closure
+        self.k = k
         self.env_s = env_s
-        self.env_v = env_v
-    def eval_exp(self, exp, env_s, env_v, k):
-        vals = [None]*len(exp.children)
-        return build_prim_eval_cont(self.exp.children, 1, identity, vals, 1, len(exp.children)-1, env_s, env_v, closure_k(self, k))
+        self.prev_env_v = prev_env_v
+    def plug_reduce(self, v):
+        assert isinstance(v, MultiValue)
+        return (self.closure.lambda_ast.body,
+                self.env_s, EnvironmentValues(v.values, self.prev_env_v),
+                self.k)
 
 class LetAST(AST):
     def __init__(self, vars, var_vals, body):
@@ -282,9 +376,12 @@ class LetAST(AST):
         self.should_enter = False
         self.top_env_s = [var.string_value for var in vars]
     def eval(self, env_s, env_v, k):
-        vals = [None]*len(vars)
-        return (self.var_vals[0], env_s, env_v,
-                _prim_n(self.var_vals, 1, len(vars), env_s, env_v, let_k(self, env_s, env_v, k)))
+        vals = [None]*len(self.vars)
+        return build_prim_eval_cont(self.var_vals, 0, vals,
+                                    0, len(self.var_vals),
+                                    env_s, env_v,
+                                    let_k(self, env_s, env_v, k))
+
 class let_k(Cont):
     def __init__(self, let_ast, env_s, env_v, k):
         self.let_ast = let_ast
@@ -295,3 +392,84 @@ class let_k(Cont):
         assert isinstance(v, MultiValue)
         new_env_s = create_new_env_structure(self.let_ast.top_env_s, self.env_s)
         return (self.let_ast.body, new_env_s, EnvironmentValues(v.values, self.env_v), self.k)
+
+class LetrecAST(AST):
+    def __init__(self, var, var_val, body):
+        self.var = var
+        self.var_val = var_val
+        self.body = body
+        self.should_enter = False
+        self.top_env_s = [var.string_value]
+    def eval(self, env_s, env_v, k):
+        return (self.var_val, env_s, env_v, letrec_k(self, env_s, env_v, k))
+
+class letrec_k(Cont):
+    def __init__(self, letrec_ast, env_s, env_v, k):
+        self.letrec_ast = letrec_ast
+        self.env_s = env_s
+        self.env_v = env_v
+        self.k = k
+    def plug_reduce(self, v):
+        assert isinstance(v, Closure)
+        new_c = Closure(v.lambda_ast, v.env_s, v.env_v, self.letrec_ast.var.string_value)
+        #FIXME need separate env for letrec if the closure comes from inside some other expression
+        return self.letrec_ast.body, new_c.env_s, new_c.env_v, self.k
+
+class Bool(Value):
+    pass
+
+true = Bool()
+false = Bool()
+class Void(Value):
+    pass
+void = Void()
+nil = None
+
+class IfAST(AST):
+    def __init__(self, ch, el, th):
+        self.ch = ch
+        self.el = el
+        self.th = th
+        self.should_enter = False
+    def eval(self, env_s, env_v, k):
+        return (self.ch, env_s, env_v, if_k(self, env_s, env_v, k))
+class if_k(Cont):
+    def __init__(self, if_ast, env_s, env_v, k):
+        self.if_ast = if_ast
+        self.env_s = env_s
+        self.env_v = env_v
+        self.k = k
+    def plug_reduce(self, v):
+        if v == true:
+            return (self.if_ast.th, self.env_s, self.env_v, self.k)
+        else:
+            return (self.if_ast.el, self.env_s, self.env_v, self.k)
+
+class BeginAST(AST):
+    def __init__(self, exps):
+        self.exps = exps
+    def eval(self, env_s, env_v, k):
+        return (self.exps[0], env_s, env_v, begin_k(self.exps, 1, len(self.exps), env_s, env_v, k))
+
+class begin_k(Cont):
+    def __init__(self, exps, index, end_index, env_s, env_v, k):
+        self.exps = exps
+        self.index = index
+        self.end_index = end_index
+        self.env_s = env_s
+        self.env_v = env_v
+        self.k = k
+    def plug_reduce(self, v):
+        if self.index == self.end_index:
+            return k.plug_reduce(v)
+        else:
+            return (self.exps[self.index],
+                    env_s, env_v,
+                    begin_k(self.exps, self.index+1, self.end_index, self.env_s, self.env_v, k))
+
+def can_simple_eval(exp):
+    return isinstance(exp, SymbolAST) or isinstance(exp, NumberAST)
+
+def simple_interpret(exp, env_s, env_v):
+    return env_lookup(env_s, env_v, exp.string_value)
+
