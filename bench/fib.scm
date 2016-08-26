@@ -4,5 +4,5 @@
                     n
                     (+ (fib (- n 1))
                        (fib (- n 2)))))))
-  (time (display (fib 35))))
+  (time (display (fib 10))))
 

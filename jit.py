@@ -18,6 +18,7 @@ k_jitdriver = JitDriver(greens=['k_exp'],
 def eval_exp(t):
     exp, env_s, env_v, k = t
     while True:
+
         exp_jitdriver.jit_merge_point(exp=exp, env_struct=env_s, env_values=env_v, k=k)
 
         exp, env_s, env_v, k = exp.eval(env_s, env_v, k)

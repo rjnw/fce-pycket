@@ -333,6 +333,10 @@ class LambdaAST(AST):
         self.top_env_s = [var.string_value for var in vars]
     def eval(self, env_s, env_v, k):
         return k.plug_reduce(Closure(self, env_s, env_v))
+
+    def tostring(self):
+        return '(lambda ('+' '.join([v.tostring() for v in self.vars])+') '+self.body.tostring()+')'
+
 def indentity(x):
     return x
 
@@ -381,6 +385,11 @@ class LetAST(AST):
                                     0, len(self.var_vals),
                                     env_s, env_v,
                                     let_k(self, env_s, env_v, k))
+    def tostring(self):
+        return '(let '+'v: '+\
+            ','.join([v.tostring() for v in self.vars])+\
+            'vals:'+','.join([v.tostring() for v in self.var_vals])+\
+            self.body.tostring()+')'
 
 class let_k(Cont):
     def __init__(self, let_ast, env_s, env_v, k):
@@ -402,6 +411,8 @@ class LetrecAST(AST):
         self.top_env_s = [var.string_value]
     def eval(self, env_s, env_v, k):
         return (self.var_val, env_s, env_v, letrec_k(self, env_s, env_v, k))
+    def tostring(self):
+        return 'letrec'
 
 class letrec_k(Cont):
     def __init__(self, letrec_ast, env_s, env_v, k):
@@ -426,13 +437,15 @@ void = Void()
 nil = None
 
 class IfAST(AST):
-    def __init__(self, ch, el, th):
+    def __init__(self, ch, th, el):
         self.ch = ch
-        self.el = el
         self.th = th
+        self.el = el
         self.should_enter = False
     def eval(self, env_s, env_v, k):
         return (self.ch, env_s, env_v, if_k(self, env_s, env_v, k))
+    def tostring(self):
+        return '(if '+self.ch.tostring()+self.th.tostring()+self.el.tostring()+')'
 class if_k(Cont):
     def __init__(self, if_ast, env_s, env_v, k):
         self.if_ast = if_ast
@@ -450,6 +463,8 @@ class BeginAST(AST):
         self.exps = exps
     def eval(self, env_s, env_v, k):
         return (self.exps[0], env_s, env_v, begin_k(self.exps, 1, len(self.exps), env_s, env_v, k))
+    def tostring(self):
+        return '(begin '+' '.join([b.tostring() for b in self.exps])+')'
 
 class begin_k(Cont):
     def __init__(self, exps, index, end_index, env_s, env_v, k):
@@ -461,11 +476,11 @@ class begin_k(Cont):
         self.k = k
     def plug_reduce(self, v):
         if self.index == self.end_index:
-            return k.plug_reduce(v)
+            return self.k.plug_reduce(v)
         else:
             return (self.exps[self.index],
-                    env_s, env_v,
-                    begin_k(self.exps, self.index+1, self.end_index, self.env_s, self.env_v, k))
+                    self.env_s, self.env_v,
+                    begin_k(self.exps, self.index+1, self.end_index, self.env_s, self.env_v, self.k))
 
 def can_simple_eval(exp):
     return isinstance(exp, SymbolAST) or isinstance(exp, NumberAST)

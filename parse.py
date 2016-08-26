@@ -61,14 +61,18 @@ def get_ast(tokens, captured_env, init_env):
     if isinstance(rator, SexpAST):
         return SexpAST(list(tokens))
     elif rator.string_value == lambda_symbol.string_value:
-        return LambdaAST(tokens[1].children, tokens[2])
+        vrs = tokens[1]
+        assert isinstance(vrs, SexpAST)
+        return LambdaAST(vrs.children, tokens[2])
     elif rator.string_value == let_symbol.string_value:
-        vars = [e[0] for e in tokens[1].children]
-        var_vals = [e[1] for e in tokens[1].children]
+        vr_vl = tokens[1]
+        assert isinstance(vr_vl, SexpAST)
+        vars = [e[0] for e in vr_vl.children]
+        var_vals = [e[1] for e in vr_vl.children]
         return LetAST(vars, var_vals, tokens[2])
     elif rator.string_value == letrec_symbol.string_value:
-        var = tokens[1][0].children[0]
-        var_val = tokens[1][0].children[1]
+        var = tokens[1][0][0]
+        var_val = tokens[1][0][1]
         return LetrecAST(var, var_val, tokens[2])
     elif rator.string_value == if_symbol.string_value:
         return IfAST(tokens[1], tokens[2], tokens[3])
