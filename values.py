@@ -88,13 +88,15 @@ def prim_one_arg(func):
                 return (exp[1], env_s, env_v, prim_k(exp, env_s, env_v, k))
     return prim_eval
 
-def prim_two_arg(func):
-    # ast = PrimFunc2AST(func)
-    # def create_ast_state(exp, env_s, env_v, v1, v2, k):
-    #     env_s = create_new_env_structure([compute_unique_id(exp[1]), compute_unique_id(exp[2])], env_s)
-    #     env_v = EnvironmentValues([v1, v2], env_v)
-    #     return ast, env_s, env_v, k
+class prim_store(object):
+    _immutable_fields_ = ['exp', 'env_s', 'env_v', 'k']
+    def __init__(self, exp, env_s, env_v, k):
+        self.exp = exp
+        self.env_s = env_s
+        self.env_v = env_v
+        self.k = k
 
+def prim_two_arg(func):
     class prim_k1(Cont):
         _attrs_ = _immutable_fields_ = ['exp', 'env_s', 'env_v', 'k']
         def __init__(self, exp, env_s, env_v, k):
