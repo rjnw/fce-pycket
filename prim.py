@@ -13,6 +13,19 @@ class PlugReduce(State):
     def __init__(self, t):
         self.t = t
 
+def raise_eval(k, v):
+
+    if k.plug_loop:
+        return k,v
+    else:
+        raise EvalExp(k.plug_reduce(v))
+def raise_plug(k, v):
+
+    if k.plug_loop:
+        raise PlugReduce((k,v))
+    else:
+        return k.plug_reduce(v)
+
 class Value(object):
     _attrs_ = []
     def evaluate(self, exp, env_s , env_v, k):
@@ -156,6 +169,7 @@ class app_k(Cont):
         self.env_s = env_s
         self.env_v = env_v
         self.k = k
+        self.plug_reduce = False
     def plug_reduce(self, v):
         return v.evaluate(self.exp, self.env_s, self.env_v, self.k)
 
@@ -218,6 +232,7 @@ class NumberAST(AST):
     def tostring(self):
         return str(self.number_value.number_value)
     def eval(self, env_s, env_v, k):
+        return raise_plug(k, self.number_value)
         return k.plug_reduce(self.number_value)
     def simple_eval(self, env_s, env_v):
         return self.number_value
@@ -307,7 +322,7 @@ def build_prim_eval_cont(exp_array, exp_offset, value_array,
         else:
             break
     if i == end_index:
-        return k.plug_reduce(MultiValue(value_array))
+            return raise_plug(k, MultiValue(value_array))
     elif i == end_index-1:
         return (exp_array[i+exp_offset], env_s, env_v, _prim_n_end(value_array, i, k))
     else:
@@ -332,11 +347,13 @@ class _prim_n(Cont):
     def __init__(self, prim_store, current_index):
         self.current_index = current_index
         self.prim_store = prim_store
+        self.plug_loop = False
 
     def plug_reduce(self, v):
         i = self.current_index
         self.prim_store.value_array[i] = v
         return build_prim_eval_cont_with_store(self.prim_store, i+1)
+        #return build_prim_eval_cont_with_store(self.prim_store, i+1)
 
 class _prim_n_end(Cont):
     _immutable_fields_ = ['current_index', 'k']
@@ -344,9 +361,11 @@ class _prim_n_end(Cont):
         self.value_array = val_array
         self.current_index = index
         self.k = k
+        self.plug_loop = False
     def plug_reduce(self, v):
         self.value_array[self.current_index] = v
-        return self.k.plug_reduce(MultiValue(self.value_array))
+        return raise_plug(self.k, MultiValue(self.value_array))
+        #return self.k.plug_reduce(MultiValue(self.value_array))
 
 class LambdaAST(AST):
     _immutable_fields_ = ['vars[*]', 'body', 'should_enter', 'top_env_s[*]']
@@ -396,6 +415,7 @@ class closure_k(Cont):
         self.env_s = env_s
         jit.promote(self.env_s)
         self.prev_env_v = prev_env_v
+        self.plug_loop = False
     def plug_reduce(self, v):
         assert isinstance(v, MultiValue)
         return (self.closure.lambda_ast.body,
@@ -429,6 +449,7 @@ class let_k(Cont):
         self.env_s = env_s
         self.env_v = env_v
         self.k = k
+        self.plug_loop = False
     def plug_reduce(self, v):
         assert isinstance(v, MultiValue)
         new_env_s = create_new_env_structure(self.let_ast.top_env_s, self.env_s)
@@ -455,6 +476,7 @@ class letrec_k(Cont):
         self.env_s = env_s
         self.env_v = env_v
         self.k = k
+        self.plug_loop = False
     def plug_reduce(self, v):
         assert isinstance(v, Closure)
         new_c = Closure(v.lambda_ast, v.env_s, v.env_v, self.letrec_ast.var.string_value)
@@ -490,6 +512,7 @@ class if_k(Cont):
         self.env_s = env_s
         self.env_v = env_v
         self.k = k
+        self.plug_loop = False
     def plug_reduce(self, v):
         if v == true:
             return (self.if_ast.th, self.env_s, self.env_v, self.k)
@@ -501,7 +524,8 @@ class BeginAST(AST):
     def __init__(self, exps):
         self.exps = exps
     def eval(self, env_s, env_v, k):
-        return (self.exps[0], env_s, env_v, begin_k(self.exps, 1, len(self.exps), env_s, env_v, k))
+        return (self.exps[0], env_s, env_v,
+                begin_k(self.exps, 1, len(self.exps), env_s, env_v, k))
     def tostring(self):
         return '(begin '+' '.join([b.tostring() for b in self.exps])+')'
 
@@ -514,9 +538,11 @@ class begin_k(Cont):
         self.env_s = env_s
         self.env_v = env_v
         self.k = k
+        self.plug_loop = False
     def plug_reduce(self, v):
         if self.index == self.end_index:
-            return self.k.plug_reduce(v)
+            return raise_plug(self.k, v)
+            #return self.k.plug_reduce(v)
         else:
             return (self.exps[self.index],
                     self.env_s, self.env_v,
@@ -528,4 +554,3 @@ def can_simple_eval(exp):
 
 def simple_interpret(exp, env_s, env_v):
     return env_lookup(env_s, env_v, exp.string_value)
-
