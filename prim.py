@@ -14,6 +14,17 @@ class ExpState(State):
         self.k = k
     def get_jit_vars(self):
         return (self.exp, self.env_s, self.env_v, self.k)
+    def should_enter(self):
+        return self.exp.should_enter
+    def merge_point(self, jitdriver):
+        jitdriver.jit_merge_point(exp=self.exp,
+                                  env_struct=self.env_s, env_values=self.env_v,
+                                  k=self.k, state=self)
+    def enter_jit(self, jitdriver):
+        if self.exp.should_enter:
+            jitdriver.can_enter_jit(exp=self.exp,
+                                    env_struct=self.env_s, env_values=self.env_v,
+                                    k=self.k, state=self)
     def step(self):
         return self.exp.eval(self.env_s, self.env_v, self.k)
 
@@ -24,6 +35,16 @@ class ContState(State):
         self.v = v
     def get_jit_vars(self):
         return (self.k.exp, self.k.env_s, self.k.env_v, self.k.k)
+    def should_enter(self):
+        return True
+    def merge_point(self, jitdriver):
+        jitdriver.jit_merge_point(exp=self.k.exp,
+                                  env_struct=self.k.env_s, env_values=self.k.env_v,
+                                  k=self.k.k, state=self)
+    def enter_jit(self, jitdriver):
+        jitdriver.can_enter_jit(exp=self.k.exp,
+                                env_struct=self.k.env_s, env_values=self.k.env_v,
+                                k=self.k.k, state=self)
     def step(self):
         return self.k.k.plug_reduce(self.v)
 

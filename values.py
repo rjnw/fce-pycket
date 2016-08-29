@@ -20,11 +20,8 @@ def prim_one_arg(func):
             self.env_v = env_v
             self.k = k
         def plug_reduce(self, v):
-            #return create_ast_state(self.exp, self.env_s, self.env_v, v, self.k)
             return ContState(self, func(v))
             return self.k.plug_reduce(func(v))
-        def plug_reduce_from_loop(self, v):
-            return self.k.plug_reduce(v)
 
     class prim_eval(Value):
         def evaluate(self, exp, env_s, env_v, k):
@@ -54,9 +51,7 @@ def prim_two_arg(func):
             self.k = k
         def plug_reduce(self, v):
             return ContState(self, func(self.v1, v))
-            #return self.k.plug_reduce(func(self.v1, v))
-        def plug_reduce_from_loop(self, v):
-            return self.k.plug_reduce(v)
+            return self.k.plug_reduce(func(self.v1, v))
 
     class prim_k1_2arg(StateCont):
         _immutable_fields_ = ['exp', 'env_s', 'env_v', 'k', 'plug_reduce']
