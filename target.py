@@ -37,9 +37,9 @@ def entry_point(argv):
     else:
         init_ast = ModuleAST(list(start_module))
     env_s, env_v = INIT_ENV
-    tramp = EvalExp((init_ast, env_s, env_v, halt_k()))
+    state = ExpState(init_ast, env_s, env_v, halt_k())
     try:
-        eval(tramp)
+        eval(state)
     except Done, e:
         return 0
 
