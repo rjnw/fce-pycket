@@ -140,7 +140,7 @@ class CapturedCont(Value):
     def __init__(self, k):
         self.k = k
     def evaluate(self, exp, env_s, env_v, k):
-        return (exp[1], env_s, env_v, self.k)
+        return ExpState(exp[1], env_s, env_v, self.k)
 
 class callcc_k(Cont):
     def __init__(self, env_s, env_v, k):
@@ -149,13 +149,22 @@ class callcc_k(Cont):
         self.k = k
 
     def plug_reduce(self, v):
-        ck = closure_k(v, self.env_v, self.k) #TODO fix closure_k now takes environment structure
-        return ck.plug_reduce(CapturedCont(self.k))
+        assert isinstance(v, Closure)
+        new_env_s = create_new_env_structure(v.lambda_ast.top_env_s, self.env_s)
+        prev_env_v = find_env_in_chain_speculate(new_env_s.prev, v.env_v, self.env_s, self.env_v)
+        jit.promote(new_env_s)
+        return ExpState(v.lambda_ast.body,
+                        new_env_s, EnvironmentValues([CapturedCont(self.k)], prev_env_v),
+                        self.k)
 
+#        ck = closure_k(v, self.env_v, self.k) #TODO fix closure_k now takes environment structure
+#        return ck.plug_reduce(CapturedCont(self.k))
+
+@prim('call-with-current-continuation')
 class Callcc(Value):
     def evaluate(self, exp, env_s, env_v, k):
         arg = exp[1]
-        return (arg, env_s, env_v, callcc_k(env_s, env_v, k))
+        return ExpState(arg, env_s, env_v, callcc_k(env_s, env_v, k))
 
 # class CaptEnv(Value):
 #     def evaluate(self, exp, env_s, env_v, k):

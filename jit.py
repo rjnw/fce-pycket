@@ -1,13 +1,11 @@
 from prim import *
 from rpython.rlib.jit import JitDriver
 
-def get_printable_location(exp):
+def get_printable_location(exp, env_s):
     return exp.tostring()
-def get_printable_location_k(k_exp):
-    return k_exp.tostring()
 
-jitdriver = JitDriver(greens=['exp'],
-                      reds=['env_struct', 'env_values', 'k', 'state'],
+jitdriver = JitDriver(greens=['exp', 'env_struct'],
+                      reds=['env_values', 'k', 'state'],
                       get_printable_location=get_printable_location)
 
 

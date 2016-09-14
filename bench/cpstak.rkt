@@ -1,4 +1,4 @@
-;#lang racket
+#lang racket
 (time
  (display
   (letrec
