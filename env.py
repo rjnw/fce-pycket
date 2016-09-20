@@ -1,5 +1,8 @@
 from rpython.rlib import jit
 
+def get_ast_string(name):
+    return name
+
 class EnvironmentStructure(object):
     _immutable_ = True
     _attrs_ = ['elems', 'prev']

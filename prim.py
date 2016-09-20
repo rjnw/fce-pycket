@@ -81,6 +81,7 @@ class EnvironmentValue(Value):
 
 @jit.unroll_safe
 def env_lookup(env_struct, env_values, key):
+    #print 'lookup', key, env_struct, env_values
     while env_struct is not None:
         index = env_struct.get_index(key)
         if index == -1:
@@ -450,6 +451,7 @@ class BeginAST(AST):
     _immutable_fields_ = ['exps[*]']
     def __init__(self, exps):
         self.exps = exps
+        self.should_enter = False
     def eval(self, env_s, env_v, k):
         return ExpState(self.exps[0], env_s, env_v,
                         begin_k(self.exps, 1, len(self.exps), env_s, env_v, k))

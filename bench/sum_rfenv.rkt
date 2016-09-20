@@ -4,13 +4,14 @@
                         (if (zero? z) (f) (begin (f) (rec f (- z 1)))))))
               rec))
 (define sum
-  (letrec ((sum (lambda (i n)
-                   (if (< i 0)
-                       0
-                       (sum (- i 1) (+ i n))))))
-    sum))
- 
-(let ((f (lambda () (sum 10000 0))))
+  (lambda (env i n)
+    (let ((sum (with-environment sum env)))
+      (if (< i 0)
+          0
+          (sum env (- i 1) (+ i n))))))
+
+(let ((f (lambda () (let ((env (capture-environment)))
+                      (sum env 10000 0)))))
     (begin (rec f 1000)
            (time (rec f 5000))))
 

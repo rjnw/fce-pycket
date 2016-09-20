@@ -1,0 +1,17 @@
+#lang racket
+(define rec (letrec ((rec (lambda (f z)
+                        (if (zero? z) (f) (begin (f) (rec f (- z 1)))))))
+              rec))
+
+(let ((ack (lambda (env m n)
+             (let ((ack (with-environment ack env)))
+               (if (zero? m)
+                   (+ n 1)
+                   (if (zero? n)
+                       (ack env (- m 1) 1)
+                       (ack env (- m 1)
+                            (ack env m (- n 1)))))))))
+  (let ((f (lambda () (let ((env (capture-environment)))
+                        (ack env 3 9)))))
+    (begin (rec f 5)
+           (time (rec f 10)))))

@@ -166,24 +166,37 @@ class Callcc(Value):
         arg = exp[1]
         return ExpState(arg, env_s, env_v, callcc_k(env_s, env_v, k))
 
-# class CaptEnv(Value):
-#     def evaluate(self, exp, env_s, env_v, k):
-#         return k.plug_reduce(env)
 
-# class withenv_k(Cont):
-#     def __init__(self, eval_exp, env_s, env_v, k):
-#         self.exp = exp
-#         self.env = env
-#         self.k = k
-#     def plug_reduce(self, v):
-#         return (self.exp, v, self.k)
+@prim('capture-environment')
+class CaptEnv(Value):
+    def evaluate(self, exp, env_s, env_v, k):
+        return k.plug_reduce(EnvironmentValue(env_s, env_v))
 
-# class WithEnv(Value):
-#     def evaluate(self, exp, env_s, env_v, k):
-#         env_exp = exp[1]
-#         eval_exp = exp[2]
-#         return (evn_exp, env_s, env_v, withenv_k(eval_exp, env_s, env_v, k))
+class withenv_k(Cont):
+    _immutable_fields_ = ['exp', 'k']
+    def __init__(self, eval_exp, k):
+        self.exp = eval_exp
+        self.k = k
+    def plug_reduce(self, v):
+        assert isinstance(v, EnvironmentValue)
+        jit.promote(v.env_s)
+        return ExpState(self.exp, v.env_s, v.env_v, self.k)
 
+@prim('with-environment')
+class WithEnv(Value):
+    def evaluate(self, exp, env_s, env_v, k):
+        env_exp = exp[2]
+        eval_exp = exp[1]
+        if can_simple_eval(env_exp):
+            env_value = simple_interpret(env_exp, env_s, env_v)
+            assert isinstance(env_value, EnvironmentValue)
+            jit.promote(env_value.env_s)
+            if can_simple_eval(eval_exp):
+                exp_v = simple_interpret(eval_exp, env_value.env_s, env_value.env_v)
+                return k.plug_reduce(exp_v)
+
+            return ExpState(eval_exp, env_value.env_s, env_value.env_v, k)
+        return ExpState(env_exp, env_s, env_v, withenv_k(eval_exp, k))
 
 class ConsCell(Value):
     _attrs_ = ['car', 'cdr']
@@ -192,9 +205,9 @@ class ConsCell(Value):
         self.car = car
         self.cdr = cdr
 
-@prim('begin0')
+@prim('begin')
 @prim_two_arg
-def begin0(v1, v2):
+def begin(v1, v2):
     return v2
 
 @prim('cons')

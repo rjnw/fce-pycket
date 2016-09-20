@@ -19,6 +19,7 @@
                                    y
                                    (lambda (v3)
                                      (tak v1 v2 v3 k)))))))))))
-  (let ((f (lambda () (tak 18 12 6 (lambda (x) x)))))
+  (let ((f (lambda () (let ((env (capture-environment)))
+                        ((with-environment tak env) 18 12 6 (lambda (x) x))))))
     (begin (rec f 50)
            (time (rec f 1000)))))

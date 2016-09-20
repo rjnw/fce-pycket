@@ -10,7 +10,8 @@
                        (sum (- i 1) (+ i n))))))
     sum))
  
-(let ((f (lambda () (sum 10000 0))))
+(let ((f (lambda () (let ((env (capture-environment)))
+                      (with-environment (sum 10000 0) env)))))
     (begin (rec f 1000)
            (time (rec f 5000))))
 

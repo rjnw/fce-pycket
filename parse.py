@@ -58,7 +58,7 @@ begin_symbol = global_symbol_table.make_symbol_ast('begin')
 
 def get_ast(tokens, captured_env, init_env):
     rator = tokens[0]
-    if isinstance(rator, SexpAST):
+    if not isinstance(rator, SymbolAST):
         return SexpAST(list(tokens))
     elif rator.string_value == lambda_symbol.string_value:
         vrs = tokens[1]
@@ -76,8 +76,8 @@ def get_ast(tokens, captured_env, init_env):
         return LetrecAST(var, var_val, tokens[2])
     elif rator.string_value == if_symbol.string_value:
         return IfAST(tokens[1], tokens[2], tokens[3])
-    elif rator.string_value == begin_symbol.string_value:
-        return BeginAST(list(tokens))
+    # elif rator.string_value == begin_symbol.string_value:
+    #     return BeginAST(list(tokens[1:]))
     else:
         return SexpAST(list(tokens))
 
