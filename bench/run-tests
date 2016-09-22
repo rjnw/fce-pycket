@@ -22,9 +22,18 @@ tests="ack cpstak fib sum tak"
 #     run_test racket $t.rkt racket $t
 #     echo "running with firstclass environment"
 #     run_test ../target-c $t\_fenv.rkt firstclass-fenv $t
-    
 # done
 
-run_test js fib.js javascript fib
-run_test js fib\_fenv.js javascript fib\_fenv
-run_test js fib\_rfenv.js javascript fib\_rfenv
+#jst="ack fib sum tak"
+jst="sum"
+for t in $jst
+do
+    echo "with javascript $t:"
+    run_test js $t.js javascript $t
+    run_test js $t\_fenv.js javascript-fenv $t
+done
+
+
+# run_test js fib.js javascript fib
+# run_test js fib\_fenv.js javascript fib\_fenv
+# run_test js fib\_rfenv.js javascript fib\_rfenv

@@ -6,7 +6,7 @@ function sum(n){
     return total;
 }
 console.time("cpu time");
-for (i = 0; i < 5000; i++) {
+for (i = 0; i < 10003; i++) {
     sum(10000);
 }
 console.timeEnd("cpu time");
