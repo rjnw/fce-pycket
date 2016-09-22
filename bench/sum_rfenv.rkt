@@ -13,5 +13,5 @@
 (let ((f (lambda () (let ((env (capture-environment)))
                       (sum env 10000 0)))))
     (begin (rec f 1000)
-           (time (rec f 5000))))
+           (time (rec f 100000))))
 

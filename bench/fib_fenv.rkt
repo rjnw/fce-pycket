@@ -4,10 +4,12 @@
               rec))
 
 (letrec ((fib (lambda (n)
-                (if (< n 2)
-                    n
-                    (+ (fib (- n 1))
-                       (fib (- n 2)))))))
+                (let ((env (capture-environment)))
+                  (with-environment
+                    (if (< n 2)
+                       n
+                       (+ (fib (- n 1))
+                          (fib (- n 2)))) env)))))
   (let ((f (lambda () (let ((env (capture-environment)))
                         (with-environment (fib 10) env)))))
     (begin (rec f 1000)

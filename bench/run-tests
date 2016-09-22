@@ -13,14 +13,18 @@ function run_test {
 }
 tests="ack cpstak fib sum tak"
 
-echo "running firstclass:"
-for t in $tests
-do
-    echo "$t:"
-    run_test ../target-c $t.rkt firstclass $t
-    run_test ../../pycket/pycket-c $t.rkt pycket $t
-    run_test racket $t.rkt racket $t
-    echo "running with firstclass environment"
-    run_test ../target-c $t\_fenv.rkt firstclass-fenv $t
+# echo "running firstclass:"
+# for t in $tests
+# do
+#     echo "$t:"
+#     run_test ../target-c $t.rkt firstclass $t
+#     run_test ../../pycket/pycket-c $t.rkt pycket $t
+#     run_test racket $t.rkt racket $t
+#     echo "running with firstclass environment"
+#     run_test ../target-c $t\_fenv.rkt firstclass-fenv $t
     
-done
+# done
+
+run_test js fib.js javascript fib
+run_test js fib\_fenv.js javascript fib\_fenv
+run_test js fib\_rfenv.js javascript fib\_rfenv
