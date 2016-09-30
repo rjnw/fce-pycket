@@ -6,14 +6,13 @@
 (define sum
   (letrec ((sum (lambda (i n)
                   (let ((env (capture-environment)))
-                    (with (if (< i 0)
+                    (with-environment (if (< i 0)
                               0
                               (sum (- i 1) (+ i n)))
                           env)))))
     sum))
  
-(let ((f (lambda () (let ((env (capture-environment)))
-                      (with-environment (sum 10000 0) env)))))
+(let ((f (lambda () (sum 10000 0))))
     (begin (rec f 1000)
            (time (rec f 100000))))
 

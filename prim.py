@@ -415,7 +415,9 @@ class Bool(Value):
     pass
 
 true = Bool()
+
 false = Bool()
+
 class Void(Value):
     pass
 void = Void()

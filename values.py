@@ -205,6 +205,8 @@ class ConsCell(Value):
         self.car = car
         self.cdr = cdr
 
+prim_value('false', false)
+prim_value('true', true)
 @prim('begin')
 @prim_two_arg
 def begin(v1, v2):
@@ -256,7 +258,13 @@ def greater_than(e1, e2):
         return false
     else:
         return true
-    
+
+@prim('remainder')
+@prim_two_arg
+def remainder(e1, e2):
+    assert isinstance(e1, Number) and isinstance(e2, Number)
+    return Number(int(e1.number_value % e2.number_value))
+
 @prim('=')
 @prim_two_arg
 def equal(e1, e2):

@@ -14,9 +14,7 @@ def eval(state):
     while True:
         #print '\n\nexp', exp.tostring(), 'env_s', env_s, 'env_v', env_v, 'k', k
         jitdriver.jit_merge_point(exp=exp, env_struct=env_s, env_values=env_v, k=k, state=state)
-        # state.merge_point(jitdriver)
         state = state.step()
-        # state.enter_jit(jitdriver)
         exp, env_s, env_v, k = state.get_jit_vars()
         if state.should_enter():
             jitdriver.can_enter_jit(exp=exp, env_struct=env_s, env_values=env_v, k=k, state=state)

@@ -6,34 +6,40 @@
 function run_test {
     echo $1 $2
     echo "" > ./test-data/$3-$4.csv
-    for i in {1..5}
+    for i in {1..50}
     do
         $1 $2 | grep "cpu time" | sed -r 's/.*cpu time: ([0-9]+).*/\1/' >> ./test-data/$3-$4.csv
     done
 }
+
 tests="ack cpstak fib sum tak"
 
-# echo "running firstclass:"
-# for t in $tests
-# do
-#     echo "$t:"
-#     run_test ../target-c $t.rkt firstclass $t
-#     run_test ../../pycket/pycket-c $t.rkt pycket $t
-#     run_test racket $t.rkt racket $t
-#     echo "running with firstclass environment"
-#     run_test ../target-c $t\_fenv.rkt firstclass-fenv $t
-# done
-
-#jst="ack fib sum tak"
-jst="sum"
-for t in $jst
+echo "running firstclass:"
+for t in $tests
 do
-    echo "with javascript $t:"
-    run_test js $t.js javascript $t
-    run_test js $t\_fenv.js javascript-fenv $t
+    echo "$t:"
+    # run_test ../target-c $t.rkt firstclass $t
+    # run_test ../../pycket/pycket-c $t.rkt pycket $t
+    # run_test racket $t.rkt racket $t
+    # # echo "running with firstclass environment"
+    # run_test ../target-c $t\_fenv.rkt firstclass-fenv $t
 done
 
+# jst="ack fib sum tak"
+# for t in $jst
+# do
+#     echo "with javascript $t:"
+#     run_test js $t.js javascript $t
+#     run_test js $t\_fenv.js javascript-fenv $t
+# done
 
-# run_test js fib.js javascript fib
-# run_test js fib\_fenv.js javascript fib\_fenv
-# run_test js fib\_rfenv.js javascript fib\_rfenv
+
+jst="ack fib sum tak"
+for t in $jst
+do
+    echo "with lua $t:"
+    # run_test lua5.3 $t.lua lua $t
+    # run_test lua5.3 $t\_fenv.lua lua-fenv $t
+    # run_test luajit $t.lua luajit $t
+    run_test luajit $t\_fenvjit.lua luajit-fenv $t
+done

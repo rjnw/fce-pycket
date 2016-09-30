@@ -5,13 +5,13 @@
 
 (letrec ((tak (lambda  (x y z)
                 (let ((env (capture-environment)))
-                  (if (not (< y x))
-                           z
-                           (tak (tak (- x 1) y z)
-                                (tak (- y 1) z x)
-                                (tak (- z 1) x y))) env))))
-  (let ((f (lambda () (let ((env (capture-environment)))
-                        (with-environment (tak 18 12 6) env)))))
+                  (with-environment
+                    (if (not (< y x))
+                        z
+                        (tak (tak (- x 1) y z)
+                            (tak (- y 1) z x)
+                            (tak (- z 1) x y))) env)))))
+  (let ((f (lambda () (tak 18 12 6))))
     (begin (rec f 10)
            (time (rec f 500)))))
 

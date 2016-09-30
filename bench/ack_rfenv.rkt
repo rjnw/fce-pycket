@@ -13,5 +13,4 @@
                             (ack env m (- n 1)))))))))
   (let ((f (lambda () (let ((env (capture-environment)))
                         (ack env 3 9)))))
-    (begin (rec f 5)
-           (time (rec f 10)))))
+    (time (rec f 5))))

@@ -10,7 +10,6 @@
                                         (if (zero? n)
                                             (ack (- m 1) 1)
                                             (ack (- m 1) (ack m (- n 1))))) env)))))
-  (let ((f (lambda () (let ((env (capture-environment)))
-                        (with-environment (ack 3 9) env)))))
+  (let ((f (lambda () (ack 3 9))))
     (begin (rec f 5)
            (time (rec f 10)))))

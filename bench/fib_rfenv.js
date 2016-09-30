@@ -1,7 +1,7 @@
 
-var fib = function (n, env) {
+fib_fun = function (n, env) {
     with(env) {
-        fib = fib;
+        var fib = fib_env;
     }
     if (n < 2) {
         return n;
@@ -10,13 +10,13 @@ var fib = function (n, env) {
     }
 }
 
-a = {"fib":fib};
+a = {"fib_env":fib_fun};
 for (i = 0; i <= 1000; i++){
-    console.log(fib(10, a));
+    fib_fun(10, a);
 }
 
 console.time("cpu time");
 for (i = 0; i <= 500000; i++){
-    fib(10, a);
+    fib_fun(10, a);
 }
 console.timeEnd("cpu time");

@@ -10,7 +10,7 @@
                    (+ (fib env (- n 1))
                       (fib env (- n 2))))))))
   (let ((f (lambda () (let ((env (capture-environment)))
-                        (fib env 10)))))
+                        (fib env 35)))))
     (begin (rec f 1000)
            (time (rec f 500000)))))
 
