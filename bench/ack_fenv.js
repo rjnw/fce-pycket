@@ -1,6 +1,9 @@
 
-env = {}
 function ack(m, n){
+    var env = {}
+    env.m = m
+    env.n = n
+    env.ack = ack
     with (env) {
         if (m == 0) {
             return n+1;
